@@ -34,5 +34,5 @@ $RECYCLE.BIN/
 .env
 *.key
 
-# Workspace security
-workspace/workspace.cfg
+# Workspace (separate repo — not part of this product)
+workspace/
