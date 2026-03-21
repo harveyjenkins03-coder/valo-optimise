@@ -33,3 +33,6 @@ $RECYCLE.BIN/
 # Secrets / env
 .env
 *.key
+
+# Workspace security
+workspace/workspace.cfg
