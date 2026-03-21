@@ -17,8 +17,11 @@ backups/
 *.log
 
 # IDE
-.vscode/
 .idea/
+# Share VS Code workspace settings with collaborators (but not personal settings)
+.vscode/settings.json
+!.vscode/extensions.json
+!.vscode/launch.json
 *.suo
 *.user
 
