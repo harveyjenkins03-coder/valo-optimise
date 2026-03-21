@@ -1,32 +1,68 @@
-# Security Notes
+# Security Policy — Valo Optimise
 
-## Workspace password
-`workspace/workspace.cfg` holds the plaintext workspace password (hashed at compare
-time using SHA-256). **Change the `PASSWORD` value before sharing access with
-anyone outside your immediate team.** The file is gitignored and must never be
-committed.
+**Owners:** Harvey Jenkins & Tobias Sanders
 
-## Session secret
-The `SESSION_SECRET` in `workspace/workspace.cfg` signs Flask session cookies.
-Rotate it whenever you suspect it has been exposed or after revoking a
-collaborator's access.
+---
 
-## ngrok / tunnel tokens
-ngrok auth tokens should be treated as single-session credentials:
-- Regenerate the token in the ngrok dashboard after each collaborative session.
-- Never commit `.env` files or any file containing the ngrok auth token.
+## Supported Versions
 
-## config.json / local settings
-`config.json` and `sensitivity_profiles.json` contain machine-local settings and
-are gitignored. Do not commit them — they may expose local file paths or personal
-configuration.
+| Version | Supported |
+|---------|-----------|
+| Latest (main branch) | Yes |
+| Older releases | No — always update to latest |
 
-## Registry operations
-Several optimisation modules write directly to the Windows registry
-(HKEY_LOCAL_MACHINE and HKEY_CURRENT_USER). The app requests UAC elevation only
-when needed. **Never run untrusted scripts as Administrator** — only run this tool
-from the project's own source that you have reviewed.
+---
 
-## Reporting issues
-If you discover a security issue in this project, please report it privately to
-the project owner rather than opening a public issue.
+## Reporting a Vulnerability
+
+**Please do NOT open a public GitHub issue for security vulnerabilities.**
+
+Report security issues privately via a GitHub Security Advisory:
+https://github.com/harveyjenkins03-coder/valo-optimise/security/advisories/new
+
+We aim to acknowledge reports within 48 hours and provide a fix within 14 days.
+
+---
+
+## Security Design
+
+### Registry Operations
+Valo Optimise writes to the Windows registry to apply performance tweaks. The
+utils/backup_manager.py module enforces a strict whitelist of allowed registry
+paths — no code may write to a path not explicitly permitted in that whitelist.
+
+### Admin Elevation
+The app requests UAC elevation at startup, used only to modify the specific
+registry keys and power settings required for each feature. It is not used to
+access personal data, credentials, or unrelated system areas.
+
+### No Background Network Calls
+The application makes no background network requests. The only outbound connection
+is the user-initiated Valorant stats lookup to the public third-party API
+api.henrikdev.xyz. All connections use HTTPS with SSL verification enabled.
+
+### Local Data Only
+All settings, profiles, and backups are stored locally. No data is transmitted
+to the owners or any analytics service. See PRIVACY.md for full details.
+
+---
+
+## Code Integrity
+
+Only authorised owners (Harvey Jenkins & Tobias Sanders) may merge changes into
+the master branch. Branch protection rules require pull request reviews before
+merging. No direct pushes to the protected branch are permitted.
+
+If you obtained this software from a source other than the official GitHub
+repository or an authorised distribution platform, it may have been tampered with.
+
+---
+
+## Sensitive Files
+
+config.json and sensitivity_profiles.json are gitignored and must never be
+committed. Registry backups in backups/ are also gitignored.
+
+---
+
+(c) 2026 Harvey Jenkins & Tobias Sanders. All Rights Reserved.
