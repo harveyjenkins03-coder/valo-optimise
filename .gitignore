@@ -1,0 +1,32 @@
+# Python
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+.Python
+*.egg-info/
+dist/
+build/
+
+# App data
+config.json
+sensitivity_profiles.json
+backups/
+
+# Logs
+*.log
+
+# IDE
+.vscode/
+.idea/
+*.suo
+*.user
+
+# Windows
+Thumbs.db
+Desktop.ini
+$RECYCLE.BIN/
+
+# Secrets / env
+.env
+*.key
