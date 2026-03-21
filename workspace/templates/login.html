@@ -1,0 +1,208 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Valo Optimise · Workspace Login</title>
+  <style>
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+    :root {
+      --bg:      #0a0e1a;
+      --panel:   #111827;
+      --panel2:  #1c2a3a;
+      --accent:  #ff4655;
+      --text:    #f0f4ff;
+      --muted:   #6b7a99;
+      --border:  #1e2d40;
+    }
+
+    html, body {
+      height: 100%;
+      width: 100%;
+      background: var(--bg);
+      color: var(--text);
+      font-family: 'Segoe UI', system-ui, -apple-system, sans-serif;
+      font-size: 14px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+    }
+
+    .login-wrapper {
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      gap: 0;
+      width: 100%;
+      padding: 20px;
+    }
+
+    .login-card {
+      width: 400px;
+      background: var(--panel);
+      border: 1px solid var(--border);
+      border-radius: 10px;
+      padding: 40px 36px 32px;
+      display: flex;
+      flex-direction: column;
+      gap: 20px;
+    }
+
+    .login-logo {
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      gap: 6px;
+      margin-bottom: 4px;
+    }
+
+    .logo-title {
+      display: flex;
+      align-items: baseline;
+      gap: 3px;
+    }
+
+    .logo-valo {
+      font-size: 22px;
+      font-weight: 800;
+      color: var(--accent);
+      letter-spacing: 2px;
+    }
+
+    .logo-opt {
+      font-size: 22px;
+      font-weight: 700;
+      color: var(--text);
+      letter-spacing: 2px;
+    }
+
+    .logo-sub {
+      font-size: 11px;
+      color: var(--muted);
+      letter-spacing: 3px;
+      text-transform: uppercase;
+    }
+
+    .divider {
+      width: 100%;
+      height: 1px;
+      background: var(--border);
+    }
+
+    .login-form {
+      display: flex;
+      flex-direction: column;
+      gap: 12px;
+    }
+
+    .input-label {
+      font-size: 11px;
+      color: var(--muted);
+      letter-spacing: 1px;
+      text-transform: uppercase;
+      margin-bottom: 4px;
+    }
+
+    .password-input {
+      width: 100%;
+      padding: 11px 14px;
+      background: var(--panel2);
+      border: 1px solid var(--border);
+      border-radius: 6px;
+      color: var(--text);
+      font-size: 14px;
+      font-family: inherit;
+      outline: none;
+      transition: border-color 0.15s;
+    }
+
+    .password-input::placeholder {
+      color: var(--muted);
+    }
+
+    .password-input:focus {
+      border-color: var(--accent);
+    }
+
+    .submit-btn {
+      width: 100%;
+      padding: 12px;
+      background: var(--accent);
+      border: none;
+      border-radius: 6px;
+      color: #fff;
+      font-size: 14px;
+      font-weight: 700;
+      font-family: inherit;
+      letter-spacing: 1px;
+      cursor: pointer;
+      transition: background 0.15s, transform 0.1s;
+    }
+
+    .submit-btn:hover {
+      background: #e03545;
+    }
+
+    .submit-btn:active {
+      transform: scale(0.98);
+    }
+
+    .error-msg {
+      background: rgba(255, 70, 85, 0.12);
+      border: 1px solid rgba(255, 70, 85, 0.35);
+      border-radius: 6px;
+      color: var(--accent);
+      font-size: 12px;
+      padding: 10px 13px;
+      display: {% if error %}block{% else %}none{% endif %};
+    }
+
+    .login-note {
+      text-align: center;
+      font-size: 11px;
+      color: var(--muted);
+      margin-top: 4px;
+    }
+  </style>
+</head>
+<body>
+  <div class="login-wrapper">
+    <div class="login-card">
+
+      <div class="login-logo">
+        <div class="logo-title">
+          <span class="logo-valo">VALO</span>
+          <span class="logo-opt">OPTIMISE</span>
+        </div>
+        <div class="logo-sub">· Workspace</div>
+      </div>
+
+      <div class="divider"></div>
+
+      <form class="login-form" method="POST" action="/login">
+        <div>
+          <div class="input-label">Password</div>
+          <input
+            class="password-input"
+            type="password"
+            name="password"
+            placeholder="Enter workspace password..."
+            autofocus
+            autocomplete="current-password"
+          />
+        </div>
+
+        {% if error %}
+        <div class="error-msg">{{ error }}</div>
+        {% endif %}
+
+        <button class="submit-btn" type="submit">Enter &rarr;</button>
+      </form>
+
+      <div class="login-note">🔒 Private workspace — authorised access only</div>
+
+    </div>
+  </div>
+</body>
+</html>

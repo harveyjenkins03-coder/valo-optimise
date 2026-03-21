@@ -55,7 +55,14 @@ class ValorantConfig:
 
     def find_config_path(self) -> str:
         local = os.environ.get("LOCALAPPDATA", "")
-        base = os.path.join(local, "VALORANT", "Saved", "Config")
+        if not local:
+            return None
+        # Resolve and normalise both sides to guard against path traversal via
+        # a manipulated LOCALAPPDATA env var.
+        local_real = os.path.normcase(os.path.normpath(os.path.realpath(local)))
+        base = os.path.normpath(os.path.join(local, "VALORANT", "Saved", "Config"))
+        if not os.path.normcase(base).startswith(local_real):
+            return None
 
         if not os.path.isdir(base):
             return None
