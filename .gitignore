@@ -12,6 +12,7 @@ build/
 config.json
 sensitivity_profiles.json
 backups/
+paperclip_config.json
 
 # Logs
 *.log

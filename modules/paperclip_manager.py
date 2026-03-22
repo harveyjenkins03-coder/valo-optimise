@@ -25,14 +25,13 @@ import threading
 import shutil
 
 # ── Paths ─────────────────────────────────────────────────────────────────────
-INSTALL_DIR = os.path.join(
-    os.environ.get("LOCALAPPDATA", os.path.expanduser("~")),
-    "ValoOptimise", "paperclip"
+# All Paperclip files live in the Valo Workspace folder (sibling on Desktop).
+_WORKSPACE_DIR = os.path.join(
+    os.path.expanduser("~"), "OneDrive", "Desktop", "Valo Workspace"
 )
-CONFIG_FILE = os.path.join(
-    os.path.dirname(os.path.dirname(os.path.abspath(__file__))),
-    "paperclip_config.json"
-)
+INSTALL_DIR = os.path.join(_WORKSPACE_DIR, "paperclip")
+CONFIG_FILE  = os.path.join(_WORKSPACE_DIR, "paperclip_config.json")
+LOG_FILE     = os.path.join(_WORKSPACE_DIR, "paperclip-server.log")
 SERVER_PORT = 3100
 SERVER_URL  = f"http://localhost:{SERVER_PORT}"
 REPO_URL    = "https://github.com/paperclipai/paperclip.git"
