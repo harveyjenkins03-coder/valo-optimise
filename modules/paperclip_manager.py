@@ -251,9 +251,12 @@ class PaperclipManager:
 
         try:
             self._log_cb = log_cb
+            # Use tsx to run TypeScript directly (db package exports TS source)
+            tsx = os.path.join(INSTALL_DIR, "server", "node_modules", ".bin", "tsx")
+            server_entry = os.path.join(INSTALL_DIR, "server", "src", "index.ts")
             self._proc = subprocess.Popen(
-                "pnpm dev",
-                cwd=INSTALL_DIR,
+                f'"{tsx}" "{server_entry}"',
+                cwd=os.path.join(INSTALL_DIR, "server"),
                 stdout=subprocess.PIPE,
                 stderr=subprocess.STDOUT,
                 text=True,
