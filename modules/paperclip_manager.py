@@ -39,9 +39,11 @@ REPO_URL    = "https://github.com/paperclipai/paperclip.git"
 
 
 def _run(cmd, *, cwd=None, timeout=300):
-    """Run a subprocess, return (returncode, stdout, stderr)."""
+    """Run a subprocess, return (returncode, stdout, stderr).
+    Uses shell=True on Windows so .CMD wrappers (npm.cmd, pnpm.cmd) work."""
     r = subprocess.run(
-        cmd, cwd=cwd, capture_output=True, text=True, timeout=timeout
+        cmd, cwd=cwd, capture_output=True, text=True, timeout=timeout,
+        shell=True
     )
     return r.returncode, r.stdout.strip(), r.stderr.strip()
 
@@ -250,12 +252,13 @@ class PaperclipManager:
         try:
             self._log_cb = log_cb
             self._proc = subprocess.Popen(
-                ["pnpm", "dev"],
+                "pnpm dev",
                 cwd=INSTALL_DIR,
                 stdout=subprocess.PIPE,
                 stderr=subprocess.STDOUT,
                 text=True,
                 bufsize=1,
+                shell=True,
             )
             # Stream server output to log callback in background
             self._log_thread = threading.Thread(
