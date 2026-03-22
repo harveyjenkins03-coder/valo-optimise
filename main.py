@@ -4052,7 +4052,7 @@ class AgentCrewFrame(ctk.CTkFrame):
         th.grid(row=0, column=0, sticky="ew", padx=16, pady=(14, 6))
         make_section_label(th, "Task").pack(side="left")
 
-        self._save_btn = ghost_button(th, "💾  Save to Workspace", self._save_output)
+        self._save_btn = ghost_button(th, "💾  Save", self._save_output)
         self._save_btn.pack(side="right")
         self._save_btn.configure(state="disabled")
 
@@ -4063,10 +4063,23 @@ class AgentCrewFrame(ctk.CTkFrame):
             command=self._run_agent)
         self._run_btn.pack(side="right", padx=(0, 8))
 
+        # Context attachment row
+        ctx_row = ctk.CTkFrame(task_card, fg_color="transparent")
+        ctx_row.grid(row=1, column=0, sticky="ew", padx=16, pady=(0, 4))
+        ctk.CTkLabel(ctx_row, text="Context:", font=("Arial", 10),
+                     text_color=MUTED).pack(side="left")
+        self._ctx_lbl = ctk.CTkLabel(ctx_row, text="None",
+                                      font=("Arial", 10), text_color=MUTED)
+        self._ctx_lbl.pack(side="left", padx=(6, 0))
+        ghost_button(ctx_row, "📎 Attach File", self._attach_file).pack(side="right")
+        ghost_button(ctx_row, "📋 Git Log", self._attach_git_log).pack(side="right", padx=(0, 6))
+        ghost_button(ctx_row, "✕ Clear", self._clear_context).pack(side="right", padx=(0, 4))
+        self._file_context = ""
+
         self._task_box = ctk.CTkTextbox(
             task_card, height=80, fg_color=PANEL2, text_color=MUTED,
             font=("Arial", 11), border_color=BORDER, border_width=1)
-        self._task_box.grid(row=1, column=0, sticky="ew", padx=16, pady=(0, 14))
+        self._task_box.grid(row=2, column=0, sticky="ew", padx=16, pady=(0, 14))
         self._task_box.insert("0.0", self._PLACEHOLDER)
         self._task_box.bind("<FocusIn>", self._clear_placeholder)
         self._task_box.bind("<FocusOut>", self._restore_placeholder)
@@ -4149,6 +4162,43 @@ class AgentCrewFrame(ctk.CTkFrame):
             self._task_box.configure(text_color=MUTED)
             self._task_box.insert("0.0", self._PLACEHOLDER)
 
+    # ── Context attachment ────────────────────────────────────────────────────
+
+    def _attach_file(self):
+        from modules.agent_crew import read_file_for_context
+        path = filedialog.askopenfilename(
+            title="Attach file as context",
+            filetypes=[("All text files", "*.py *.md *.txt *.json *.ini *.cfg *.ts *.js"),
+                       ("All files", "*.*")],
+        )
+        if not path:
+            return
+        ok, content = read_file_for_context(path)
+        if ok:
+            self._file_context = content
+            import os as _os
+            self._ctx_lbl.configure(
+                text=f"{_os.path.basename(path)} ({len(content):,} chars)",
+                text_color=ACCENT2)
+        else:
+            self._ctx_lbl.configure(text=f"Error: {content[:60]}", text_color=RED_LIGHT)
+
+    def _attach_git_log(self):
+        from modules.agent_crew import read_git_log
+        repo = os.path.dirname(os.path.abspath(__file__))
+        ok, content = read_git_log(repo, n=40)
+        if ok:
+            self._file_context = content
+            lines = content.count("\n") + 1
+            self._ctx_lbl.configure(
+                text=f"git log ({lines} commits)", text_color=ACCENT2)
+        else:
+            self._ctx_lbl.configure(text=f"git error: {content[:60]}", text_color=RED_LIGHT)
+
+    def _clear_context(self):
+        self._file_context = ""
+        self._ctx_lbl.configure(text="None", text_color=MUTED)
+
     # ── Run ───────────────────────────────────────────────────────────────────
 
     def _run_agent(self):
@@ -4165,10 +4215,11 @@ class AgentCrewFrame(ctk.CTkFrame):
         self._output_box.delete("0.0", "end")
         self._output_box.configure(state="disabled")
 
-        agent = self._current_agent
+        agent   = self._current_agent
+        context = self._file_context
 
         def _do():
-            return agent.run(task)
+            return agent.run(task, file_context=context)
 
         def _done(result):
             self._last_output = result
