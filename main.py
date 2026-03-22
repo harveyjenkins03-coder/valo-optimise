@@ -4,6 +4,7 @@ import json
 import threading
 import datetime
 import subprocess
+import shutil
 from tkinter import filedialog
 
 # ── Hide all subprocess console windows app-wide ──────────────────────────────
@@ -55,6 +56,7 @@ from modules.mouse_driver import (
 )
 from modules.benchmark import SystemBenchmark, METRIC_ORDER
 from modules.paperclip_manager import PaperclipManager
+from modules.agent_crew import load_agents, save_ai_cfg
 
 # ── Colors ───────────────────────────────────────────────────────────────────
 BG        = "#0a0e1a"   # deeper navy black
@@ -74,7 +76,8 @@ SIDEBAR_BG  = "#060a12"   # deepest navy — sidebar background
 SIDEBAR_ACT = "#0f1e30"   # active tab background in sidebar
 BORDER      = "#1e2d42"   # card borders / separators
 
-CONFIG_PATH = os.path.join(os.path.dirname(os.path.abspath(__file__)), "config.json")
+CONFIG_PATH   = os.path.join(os.path.dirname(os.path.abspath(__file__)), "config.json")
+WORKSPACE_DIR = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "Valo Workspace")
 
 ctk.set_appearance_mode("dark")
 ctk.set_default_color_theme("dark-blue")
@@ -3920,6 +3923,557 @@ class PaperclipFrame(ctk.CTkFrame):
 
 
 # ══════════════════════════════════════════════════════════════════════════════
+# AGENT CREW FRAME
+# ══════════════════════════════════════════════════════════════════════════════
+
+class AgentCrewFrame(ctk.CTkFrame):
+    """10 specialised AI business agents — powered by OpenClaw (free)."""
+
+    _PLACEHOLDER = "Describe the task for this agent…"
+
+    def __init__(self, parent, cfg):
+        super().__init__(parent, fg_color=BG)
+        self.cfg = cfg
+        self._agents = load_agents()
+        self._current_agent = self._agents[0] if self._agents else None
+        self._last_output = ""
+        self._build()
+
+    # ── Build ─────────────────────────────────────────────────────────────────
+
+    def _build(self):
+        self.grid_columnconfigure(0, weight=1)
+        self.grid_rowconfigure(1, weight=1)
+
+        # Header
+        hdr = ctk.CTkFrame(self, fg_color=PANEL, corner_radius=12)
+        hdr.grid(row=0, column=0, sticky="ew", padx=24, pady=(24, 8))
+        hdr.grid_columnconfigure(1, weight=1)
+        ctk.CTkLabel(hdr, text="🧠", font=("Arial", 26)).grid(
+            row=0, column=0, padx=(18, 10), pady=14)
+        ctk.CTkLabel(hdr, text="Agent Crew", font=("Arial", 18, "bold"),
+                     text_color=TEXT, anchor="w").grid(row=0, column=1, sticky="w")
+        ctk.CTkLabel(hdr,
+                     text="10 specialised AI agents — code review, marketing, legal, launch & more",
+                     font=("Arial", 11), text_color=MUTED, anchor="w"
+                     ).grid(row=1, column=1, sticky="w", pady=(0, 12), padx=(0, 18))
+
+        if not self._agents:
+            ctk.CTkLabel(self, text="No agents found in Valo Workspace/agents/",
+                         font=("Arial", 13), text_color=RED_LIGHT).grid(
+                row=1, column=0, pady=40)
+            return
+
+        # ── Body: left list + right panel ─────────────────────────────────────
+        body = ctk.CTkFrame(self, fg_color="transparent")
+        body.grid(row=1, column=0, sticky="nsew", padx=24, pady=(0, 24))
+        body.grid_columnconfigure(0, weight=0, minsize=210)
+        body.grid_columnconfigure(1, weight=1)
+        body.grid_rowconfigure(0, weight=1)
+
+        # Left — scrollable agent list
+        list_frame = ctk.CTkScrollableFrame(body, fg_color=PANEL,
+                                             corner_radius=12, width=200)
+        list_frame.grid(row=0, column=0, sticky="nsew", padx=(0, 8))
+        make_section_label(list_frame, "Select Agent").pack(
+            anchor="w", padx=14, pady=(14, 8))
+
+        self._agent_btns: dict = {}
+        for agent in self._agents:
+            btn = ctk.CTkButton(
+                list_frame,
+                text=f"{agent.icon}  {agent.name}",
+                anchor="w", width=180, height=32,
+                fg_color="transparent", hover_color=PANEL2,
+                text_color=MUTED, font=("Arial", 11), corner_radius=6,
+                command=lambda a=agent: self._select_agent(a),
+            )
+            btn.pack(padx=8, pady=2, fill="x")
+            self._agent_btns[agent.name] = btn
+
+        # Right — task panel
+        right = ctk.CTkFrame(body, fg_color="transparent")
+        right.grid(row=0, column=1, sticky="nsew")
+        right.grid_columnconfigure(0, weight=1)
+        right.grid_rowconfigure(2, weight=1)
+
+        # Agent info card
+        info = ctk.CTkFrame(right, fg_color=PANEL, corner_radius=12)
+        info.grid(row=0, column=0, sticky="ew", pady=(0, 8))
+        info.grid_columnconfigure(1, weight=1)
+        self._icon_lbl = ctk.CTkLabel(info, text="", font=("Arial", 28))
+        self._icon_lbl.grid(row=0, column=0, rowspan=2, padx=(16, 10), pady=14)
+        self._name_lbl = ctk.CTkLabel(info, text="", font=("Arial", 14, "bold"),
+                                       text_color=TEXT, anchor="w")
+        self._name_lbl.grid(row=0, column=1, sticky="w", pady=(14, 2))
+        self._role_lbl = ctk.CTkLabel(info, text="", font=("Arial", 11),
+                                       text_color=MUTED, anchor="w")
+        self._role_lbl.grid(row=1, column=1, sticky="w", pady=(0, 14))
+
+        # AI config row (inline, compact)
+        cfg_row = ctk.CTkFrame(info, fg_color=PANEL2, corner_radius=8)
+        cfg_row.grid(row=2, column=0, columnspan=3, sticky="ew",
+                     padx=14, pady=(0, 12))
+        cfg_row.grid_columnconfigure(1, weight=1)
+        cfg_row.grid_columnconfigure(3, weight=1)
+        ctk.CTkLabel(cfg_row, text="API URL", font=("Arial", 10),
+                     text_color=MUTED, width=55).grid(
+            row=0, column=0, padx=(10, 4), pady=8, sticky="w")
+        self._url_entry = ctk.CTkEntry(
+            cfg_row, placeholder_text="https://api.openclaw.ai/v1",
+            fg_color=PANEL, border_color=BORDER, text_color=TEXT,
+            font=("Arial", 10), height=26)
+        self._url_entry.grid(row=0, column=1, sticky="ew", padx=(0, 10), pady=8)
+        ctk.CTkLabel(cfg_row, text="Model", font=("Arial", 10),
+                     text_color=MUTED, width=40).grid(
+            row=0, column=2, padx=(0, 4), pady=8, sticky="w")
+        self._model_entry = ctk.CTkEntry(
+            cfg_row, placeholder_text="llama3",
+            fg_color=PANEL, border_color=BORDER, text_color=TEXT,
+            font=("Arial", 10), height=26, width=110)
+        self._model_entry.grid(row=0, column=3, padx=(0, 6), pady=8, sticky="ew")
+        ctk.CTkButton(cfg_row, text="Save", width=52, height=26,
+                      fg_color=PANEL, hover_color=PANEL2, text_color=MUTED,
+                      font=("Arial", 10), corner_radius=4,
+                      command=self._save_cfg).grid(
+            row=0, column=4, padx=(0, 8), pady=8)
+
+        self._cfg_status = ctk.CTkLabel(cfg_row, text="Key set via AI Agents tab",
+                                         font=("Arial", 9), text_color=MUTED)
+        self._cfg_status.grid(row=1, column=0, columnspan=5,
+                               padx=10, pady=(0, 6), sticky="w")
+
+        # Task input
+        task_card = ctk.CTkFrame(right, fg_color=PANEL, corner_radius=12)
+        task_card.grid(row=1, column=0, sticky="ew", pady=(0, 8))
+        task_card.grid_columnconfigure(0, weight=1)
+
+        th = ctk.CTkFrame(task_card, fg_color="transparent")
+        th.grid(row=0, column=0, sticky="ew", padx=16, pady=(14, 6))
+        make_section_label(th, "Task").pack(side="left")
+
+        self._save_btn = ghost_button(th, "💾  Save to Workspace", self._save_output)
+        self._save_btn.pack(side="right")
+        self._save_btn.configure(state="disabled")
+
+        self._run_btn = ctk.CTkButton(
+            th, text="▶  Run Agent", width=110, height=30,
+            fg_color=ACCENT, hover_color=ACCENT_HV, text_color=TEXT,
+            font=("Arial", 11, "bold"), corner_radius=6,
+            command=self._run_agent)
+        self._run_btn.pack(side="right", padx=(0, 8))
+
+        self._task_box = ctk.CTkTextbox(
+            task_card, height=80, fg_color=PANEL2, text_color=MUTED,
+            font=("Arial", 11), border_color=BORDER, border_width=1)
+        self._task_box.grid(row=1, column=0, sticky="ew", padx=16, pady=(0, 14))
+        self._task_box.insert("0.0", self._PLACEHOLDER)
+        self._task_box.bind("<FocusIn>", self._clear_placeholder)
+        self._task_box.bind("<FocusOut>", self._restore_placeholder)
+
+        # Output
+        out_card = ctk.CTkFrame(right, fg_color=PANEL, corner_radius=12)
+        out_card.grid(row=2, column=0, sticky="nsew")
+        out_card.grid_columnconfigure(0, weight=1)
+        out_card.grid_rowconfigure(1, weight=1)
+
+        oh = ctk.CTkFrame(out_card, fg_color="transparent")
+        oh.grid(row=0, column=0, sticky="ew", padx=16, pady=(14, 6))
+        make_section_label(oh, "Output").pack(side="left")
+        self._status_lbl = ctk.CTkLabel(oh, text="", font=("Arial", 10),
+                                         text_color=MUTED)
+        self._status_lbl.pack(side="right")
+
+        self._output_box = ctk.CTkTextbox(
+            out_card, fg_color=PANEL2, text_color=TEXT,
+            font=("Consolas", 10), border_color=BORDER, border_width=1)
+        self._output_box.grid(row=1, column=0, sticky="nsew", padx=16, pady=(0, 14))
+        self._output_box.configure(state="disabled")
+
+        # Select first agent
+        self._select_agent(self._agents[0])
+        self._load_cfg_display()
+
+    # ── Config ────────────────────────────────────────────────────────────────
+
+    def _load_cfg_display(self):
+        from modules.agent_crew import _load_ai_cfg
+        cfg = _load_ai_cfg()
+        if cfg.get("ai_api_url"):
+            self._url_entry.delete(0, "end")
+            self._url_entry.insert(0, cfg["ai_api_url"])
+        if cfg.get("ai_model"):
+            self._model_entry.delete(0, "end")
+            self._model_entry.insert(0, cfg["ai_model"])
+        if cfg.get("ai_api_key"):
+            self._cfg_status.configure(text="✓ API key loaded from AI Agents tab",
+                                        text_color=GREEN)
+
+    def _save_cfg(self):
+        url   = self._url_entry.get().strip()
+        model = self._model_entry.get().strip()
+        ok = save_ai_cfg(api_url=url, model=model)
+        if ok:
+            self._cfg_status.configure(text="✓ Saved", text_color=GREEN)
+            self.after(2000, lambda: self._cfg_status.configure(
+                text="Key set via AI Agents tab", text_color=MUTED))
+        else:
+            self._cfg_status.configure(text="Save failed", text_color=RED_LIGHT)
+
+    # ── Agent selection ───────────────────────────────────────────────────────
+
+    def _select_agent(self, agent):
+        if self._current_agent:
+            prev = self._agent_btns.get(self._current_agent.name)
+            if prev:
+                prev.configure(fg_color="transparent", text_color=MUTED,
+                                font=("Arial", 11))
+        self._current_agent = agent
+        btn = self._agent_btns.get(agent.name)
+        if btn:
+            btn.configure(fg_color=SIDEBAR_ACT, text_color=TEXT,
+                          font=("Arial", 11, "bold"))
+        self._icon_lbl.configure(text=agent.icon)
+        self._name_lbl.configure(text=agent.name)
+        self._role_lbl.configure(text=agent.role)
+
+    # ── Task input ────────────────────────────────────────────────────────────
+
+    def _clear_placeholder(self, _event=None):
+        if self._task_box.get("0.0", "end").strip() == self._PLACEHOLDER:
+            self._task_box.delete("0.0", "end")
+            self._task_box.configure(text_color=TEXT)
+
+    def _restore_placeholder(self, _event=None):
+        if not self._task_box.get("0.0", "end").strip():
+            self._task_box.configure(text_color=MUTED)
+            self._task_box.insert("0.0", self._PLACEHOLDER)
+
+    # ── Run ───────────────────────────────────────────────────────────────────
+
+    def _run_agent(self):
+        task = self._task_box.get("0.0", "end").strip()
+        if not task or task == self._PLACEHOLDER:
+            return
+        if not self._current_agent:
+            return
+
+        self._run_btn.configure(state="disabled", text="Running…")
+        self._save_btn.configure(state="disabled")
+        self._status_lbl.configure(text="⟳  Calling AI…", text_color=GOLD)
+        self._output_box.configure(state="normal")
+        self._output_box.delete("0.0", "end")
+        self._output_box.configure(state="disabled")
+
+        agent = self._current_agent
+
+        def _do():
+            return agent.run(task)
+
+        def _done(result):
+            self._last_output = result
+            self._output_box.configure(state="normal")
+            self._output_box.delete("0.0", "end")
+            self._output_box.insert("0.0", result)
+            self._output_box.configure(state="disabled")
+            self._run_btn.configure(state="normal", text="▶  Run Agent")
+            if result.startswith("ERROR"):
+                self._status_lbl.configure(text="✗ Error", text_color=RED_LIGHT)
+                self._save_btn.configure(state="disabled")
+            else:
+                self._status_lbl.configure(text="✓ Done", text_color=GREEN)
+                self._save_btn.configure(state="normal")
+
+        run_in_thread(_do, lambda r: self.after(0, lambda: _done(r)))
+
+    # ── Save ──────────────────────────────────────────────────────────────────
+
+    def _save_output(self):
+        if not self._last_output or not self._current_agent:
+            return
+        task = self._task_box.get("0.0", "end").strip()
+        path = self._current_agent.save_output(task, self._last_output)
+        self._status_lbl.configure(
+            text=f"✓ Saved to workspace", text_color=GREEN)
+        self._save_btn.configure(text="✓ Saved")
+        self.after(2000, lambda: self._save_btn.configure(text="💾  Save to Workspace"))
+
+
+# ══════════════════════════════════════════════════════════════════════════════
+# WORKSPACE FRAME
+# ══════════════════════════════════════════════════════════════════════════════
+
+class WorkspaceFrame(ctk.CTkFrame):
+    """Collaborative workspace — start, stop, and share with Tobias."""
+
+    _PORT = 8080
+
+    def __init__(self, parent, cfg):
+        super().__init__(parent, fg_color=BG)
+        self.cfg = cfg
+        self._proc = None
+        self._ngrok_proc = None
+        self._build()
+
+    # ── Build UI ──────────────────────────────────────────────────────────────
+
+    def _build(self):
+        self.grid_columnconfigure(0, weight=1)
+        self.grid_rowconfigure(2, weight=1)
+
+        # Header
+        hdr = ctk.CTkFrame(self, fg_color=PANEL, corner_radius=12)
+        hdr.grid(row=0, column=0, sticky="ew", padx=24, pady=(24, 8))
+        hdr.grid_columnconfigure(1, weight=1)
+        ctk.CTkLabel(hdr, text="🖥️", font=("Arial", 26)).grid(
+            row=0, column=0, padx=(18, 10), pady=16)
+        ctk.CTkLabel(hdr, text="Workspace", font=("Arial", 18, "bold"),
+                     text_color=TEXT, anchor="w").grid(row=0, column=1, sticky="w")
+        ctk.CTkLabel(hdr, text="Shared code viewer, notes, and file exchange for Harvey + Tobias",
+                     font=("Arial", 11), text_color=MUTED, anchor="w"
+                     ).grid(row=1, column=1, sticky="w", pady=(0, 14), padx=(0, 18))
+
+        # ── Server Control ────────────────────────────────────────────────────
+        srv_card = ctk.CTkFrame(self, fg_color=PANEL, corner_radius=12)
+        srv_card.grid(row=1, column=0, sticky="ew", padx=24, pady=6)
+        srv_card.grid_columnconfigure(0, weight=1)
+
+        sh = ctk.CTkFrame(srv_card, fg_color="transparent")
+        sh.grid(row=0, column=0, sticky="ew", padx=18, pady=(14, 8))
+        make_section_label(sh, "Workspace Server").pack(side="left")
+
+        self._status_lbl = ctk.CTkLabel(sh, text="● Checking…",
+                                         font=("Arial", 11), text_color=MUTED)
+        self._status_lbl.pack(side="right")
+
+        btn_row = ctk.CTkFrame(srv_card, fg_color="transparent")
+        btn_row.grid(row=1, column=0, sticky="ew", padx=18, pady=(0, 6))
+
+        self._start_btn = ctk.CTkButton(
+            btn_row, text="▶  Start Workspace",
+            fg_color=ACCENT, hover_color=ACCENT_HV, text_color=TEXT,
+            font=("Arial", 12, "bold"), corner_radius=8, height=36,
+            command=self._start_server)
+        self._start_btn.pack(side="left", padx=(0, 8))
+
+        self._stop_btn = ghost_button(btn_row, "⏹  Stop", self._stop_server)
+        self._stop_btn.pack(side="left")
+        self._stop_btn.configure(state="disabled")
+
+        # ── Access ────────────────────────────────────────────────────────────
+        url_row = ctk.CTkFrame(srv_card, fg_color=PANEL2, corner_radius=8)
+        url_row.grid(row=2, column=0, sticky="ew", padx=18, pady=(4, 14))
+        url_row.grid_columnconfigure(1, weight=1)
+
+        # Your link
+        ctk.CTkLabel(url_row, text="Your link:", font=("Arial", 10),
+                     text_color=MUTED).grid(row=0, column=0, padx=(12, 6), pady=(10, 4), sticky="w")
+        ctk.CTkLabel(url_row, text="http://localhost:8080",
+                     font=("Arial", 10, "bold"), text_color=ACCENT2, anchor="w"
+                     ).grid(row=0, column=1, sticky="w", pady=(10, 4))
+        ctk.CTkButton(url_row, text="Open ↗", width=60, height=22,
+                      fg_color="transparent", hover_color=PANEL, text_color=ACCENT2,
+                      font=("Arial", 10), corner_radius=4,
+                      command=lambda: self._open_url("http://localhost:8080")
+                      ).grid(row=0, column=2, padx=(4, 10), pady=(10, 4))
+
+        # Share with Tobias
+        ctk.CTkLabel(url_row, text="Share with Tobias", font=("Arial", 10, "bold"),
+                     text_color=TEXT, anchor="w"
+                     ).grid(row=1, column=0, columnspan=3, padx=12, pady=(6, 2), sticky="w")
+
+        # Step 1 — VS Code Live Share
+        step1 = ctk.CTkFrame(url_row, fg_color="transparent")
+        step1.grid(row=2, column=0, columnspan=3, sticky="ew", padx=12, pady=1)
+        ctk.CTkLabel(step1, text="1.", font=("Arial", 10, "bold"),
+                     text_color=ACCENT2, width=16).pack(side="left")
+        ctk.CTkLabel(step1, text="VS Code → Live Share panel → Share Server → 8080",
+                     font=("Arial", 10), text_color=TEXT, anchor="w").pack(side="left")
+        ctk.CTkButton(step1, text="Copy port", width=72, height=20,
+                      fg_color=PANEL, hover_color=PANEL2, text_color=MUTED,
+                      font=("Arial", 9), corner_radius=4,
+                      command=lambda: (self.clipboard_clear(), self.clipboard_append("8080"))
+                      ).pack(side="right", padx=(0, 4))
+
+        # Step 2 — ngrok
+        step2 = ctk.CTkFrame(url_row, fg_color="transparent")
+        step2.grid(row=3, column=0, columnspan=3, sticky="ew", padx=12, pady=1)
+        ctk.CTkLabel(step2, text="2.", font=("Arial", 10, "bold"),
+                     text_color=MUTED, width=16).pack(side="left")
+        ctk.CTkLabel(step2, text="Or run:  ngrok http 8080  → send Tobias the https:// URL",
+                     font=("Arial", 10), text_color=MUTED, anchor="w").pack(side="left")
+        self._ngrok_btn = ctk.CTkButton(
+            step2, text="▶ Start ngrok", width=90, height=20,
+            fg_color=PANEL, hover_color=PANEL2, text_color=MUTED,
+            font=("Arial", 9), corner_radius=4,
+            command=self._start_ngrok)
+        self._ngrok_btn.pack(side="right", padx=(0, 4))
+
+        # ngrok URL display
+        self._ngrok_lbl = ctk.CTkLabel(url_row, text="",
+                                        font=("Arial", 10, "bold"), text_color=ACCENT2, anchor="w")
+        self._ngrok_lbl.grid(row=4, column=0, columnspan=3,
+                              padx=(44, 12), pady=(0, 10), sticky="w")
+
+        # ── Server Log ────────────────────────────────────────────────────────
+        log_card = ctk.CTkFrame(self, fg_color=PANEL, corner_radius=12)
+        log_card.grid(row=2, column=0, sticky="nsew", padx=24, pady=(6, 24))
+        log_card.grid_columnconfigure(0, weight=1)
+        log_card.grid_rowconfigure(1, weight=1)
+
+        make_section_label(log_card, "Server Log").grid(
+            row=0, column=0, padx=18, pady=(14, 6), sticky="w")
+
+        self._log = ctk.CTkTextbox(log_card, fg_color=PANEL2, text_color=MUTED,
+                                    font=("Consolas", 10), height=140,
+                                    border_color=BORDER, border_width=1)
+        self._log.grid(row=1, column=0, sticky="nsew", padx=18, pady=(0, 14))
+        self._log.configure(state="disabled")
+
+        self.after(300, self._refresh_status)
+
+    # ── Helpers ───────────────────────────────────────────────────────────────
+
+    def _log_msg(self, msg: str):
+        self._log.configure(state="normal")
+        self._log.insert("end", f"{msg}\n")
+        self._log.see("end")
+        self._log.configure(state="disabled")
+
+    def _open_url(self, url: str):
+        try:
+            import webbrowser
+            webbrowser.open(url)
+        except Exception:
+            pass
+
+    def _is_running(self) -> bool:
+        if self._proc and self._proc.poll() is None:
+            return True
+        import socket as _sock
+        try:
+            with _sock.create_connection(("127.0.0.1", self._PORT), timeout=0.3):
+                return True
+        except OSError:
+            return False
+
+    def _refresh_status(self):
+        def _check():
+            return self._is_running()
+
+        def _done(running):
+            if running:
+                self._status_lbl.configure(text="● Running", text_color=GREEN)
+                self._start_btn.configure(state="disabled")
+                self._stop_btn.configure(state="normal")
+            else:
+                self._status_lbl.configure(text="● Stopped", text_color=MUTED)
+                self._start_btn.configure(state="normal")
+                self._stop_btn.configure(state="disabled")
+
+        run_in_thread(_check, lambda r: self.after(0, lambda: _done(r)))
+
+    # ── Start ─────────────────────────────────────────────────────────────────
+
+    def _start_server(self):
+        if not os.path.isdir(WORKSPACE_DIR):
+            self._log_msg(f"Workspace folder not found: {WORKSPACE_DIR}")
+            return
+        self._start_btn.configure(state="disabled", text="Starting…")
+        self._status_lbl.configure(text="● Starting…", text_color=GOLD)
+        self._log_msg("Starting workspace server…")
+
+        def _do():
+            try:
+                import time
+                proc = _orig_Popen(
+                    [sys.executable, "server.py"],
+                    cwd=WORKSPACE_DIR,
+                    stdout=subprocess.PIPE,
+                    stderr=subprocess.STDOUT,
+                    text=True,
+                    creationflags=subprocess.CREATE_NO_WINDOW,
+                )
+                self._proc = proc
+                time.sleep(1.5)
+                return proc.poll() is None
+            except Exception as e:
+                self.after(0, lambda: self._log_msg(f"Error: {e}"))
+                return False
+
+        def _done(ok):
+            self._start_btn.configure(text="▶  Start Workspace")
+            if ok:
+                self._log_msg("Workspace running at http://localhost:8080")
+                self._refresh_status()
+            else:
+                self._status_lbl.configure(text="● Error", text_color=RED_LIGHT)
+                self._start_btn.configure(state="normal")
+
+        run_in_thread(_do, lambda r: self.after(0, lambda: _done(r)))
+
+    # ── Stop ──────────────────────────────────────────────────────────────────
+
+    def _stop_server(self):
+        if self._proc:
+            try:
+                self._proc.terminate()
+            except Exception:
+                pass
+            self._proc = None
+        # Kill anything still on port 8080
+        try:
+            for conn in _psutil.net_connections(kind="tcp"):
+                if conn.laddr.port == self._PORT and conn.status == "LISTEN" and conn.pid:
+                    _psutil.Process(conn.pid).terminate()
+        except Exception:
+            pass
+        self._log_msg("Workspace server stopped.")
+        self._refresh_status()
+
+    # ── ngrok ─────────────────────────────────────────────────────────────────
+
+    def _start_ngrok(self):
+        import re as _re
+        if not shutil.which("ngrok"):
+            self._ngrok_lbl.configure(
+                text="ngrok not installed — download free at ngrok.com/download",
+                text_color=RED_LIGHT)
+            return
+        self._ngrok_btn.configure(state="disabled", text="Starting…")
+        self._ngrok_lbl.configure(text="Launching ngrok…", text_color=GOLD)
+
+        def _run():
+            try:
+                proc = _orig_Popen(
+                    f"ngrok http {self._PORT} --log=stdout",
+                    stdout=subprocess.PIPE, stderr=subprocess.STDOUT,
+                    text=True, shell=True,
+                )
+                self._ngrok_proc = proc
+                for line in proc.stdout:
+                    m = _re.search(r"https://[a-z0-9\-]+\.ngrok[.-][\w./]+", line)
+                    if m:
+                        url = m.group(0)
+                        self.after(0, lambda u=url: self._on_ngrok_url(u))
+                        break
+            except Exception as e:
+                self.after(0, lambda: self._ngrok_lbl.configure(
+                    text=f"ngrok error: {e}", text_color=RED_LIGHT))
+
+        threading.Thread(target=_run, daemon=True).start()
+
+    def _on_ngrok_url(self, url: str):
+        self._ngrok_lbl.configure(text=f"Tobias URL: {url}", text_color=ACCENT2)
+        self._ngrok_btn.configure(
+            text="Copy URL", state="normal",
+            command=lambda: (self.clipboard_clear(),
+                             self.clipboard_append(url),
+                             self._ngrok_btn.configure(text="Copied!")))
+        self._log_msg(f"ngrok URL for Tobias: {url}")
+
+
+# ══════════════════════════════════════════════════════════════════════════════
 # MAIN APP
 # ══════════════════════════════════════════════════════════════════════════════
 
@@ -3993,6 +4547,8 @@ class App(ctk.CTk):
             ("visibility",   "👁️  Visibility"),
             (None,           "BUSINESS"),
             ("agents",       "🤖  AI Agents"),
+            ("crew",         "🧠  Agent Crew"),
+            ("workspace",    "🖥️  Workspace"),
             (None,           "TOOLS"),
             ("startup",      "🗂️  Startup"),
             ("stats",        "📊  Stats"),
@@ -4078,6 +4634,8 @@ class App(ctk.CTk):
             "gpu":         GpuFrame,
             "visibility":  VisibilityFrame,
             "agents":      PaperclipFrame,
+            "crew":        AgentCrewFrame,
+            "workspace":   WorkspaceFrame,
             "startup":     StartupFrame,
             "stats":       StatsFrame,
             "guide":       GuideFrame,
