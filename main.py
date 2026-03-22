@@ -3583,32 +3583,57 @@ class PaperclipFrame(ctk.CTkFrame):
 
         ghost_button(btn_row, "⟳  Update", self._update).pack(side="left")
 
-        # Access URL display
+        # ── Connect Together ──────────────────────────────────────────────────
         url_row = ctk.CTkFrame(srv_card, fg_color=PANEL2, corner_radius=8)
-        url_row.grid(row=2, column=0, sticky="ew", padx=18, pady=(4, 6))
+        url_row.grid(row=2, column=0, sticky="ew", padx=18, pady=(4, 14))
         url_row.grid_columnconfigure(1, weight=1)
 
-        ctk.CTkLabel(url_row, text="Harvey (you):", font=("Arial", 10),
-                     text_color=MUTED).grid(row=0, column=0, padx=(12, 6), pady=(8, 2), sticky="w")
+        # Harvey row
+        ctk.CTkLabel(url_row, text="Your link:", font=("Arial", 10),
+                     text_color=MUTED).grid(row=0, column=0, padx=(12, 6), pady=(10, 3), sticky="w")
         self._harvey_lbl = ctk.CTkLabel(url_row, text="http://localhost:3100",
                                          font=("Arial", 10, "bold"), text_color=ACCENT2, anchor="w")
-        self._harvey_lbl.grid(row=0, column=1, sticky="w", pady=(8, 2))
+        self._harvey_lbl.grid(row=0, column=1, sticky="w", pady=(10, 3))
         ctk.CTkButton(url_row, text="Open ↗", width=60, height=22,
                       fg_color="transparent", hover_color=PANEL, text_color=ACCENT2,
                       font=("Arial", 10), corner_radius=4,
                       command=lambda: self._open_url(self._pm.get_harvey_url())
-                      ).grid(row=0, column=2, padx=(4, 10), pady=(8, 2))
+                      ).grid(row=0, column=2, padx=(4, 10), pady=(10, 3))
 
-        ctk.CTkLabel(url_row, text="Tobias:", font=("Arial", 10),
-                     text_color=MUTED).grid(row=1, column=0, padx=(12, 6), pady=(2, 8), sticky="w")
+        # Tobias row
+        ctk.CTkLabel(url_row, text="Tobias link:", font=("Arial", 10),
+                     text_color=MUTED).grid(row=1, column=0, padx=(12, 6), pady=3, sticky="w")
         self._tobias_lbl = ctk.CTkLabel(url_row, text="Detecting…",
                                          font=("Arial", 10, "bold"), text_color=ACCENT2, anchor="w")
-        self._tobias_lbl.grid(row=1, column=1, sticky="w", pady=(2, 8))
-        ctk.CTkButton(url_row, text="Copy", width=60, height=22,
+        self._tobias_lbl.grid(row=1, column=1, sticky="w", pady=3)
+        tobias_btns = ctk.CTkFrame(url_row, fg_color="transparent")
+        tobias_btns.grid(row=1, column=2, padx=(4, 10), pady=3)
+        ctk.CTkButton(tobias_btns, text="Copy", width=55, height=22,
                       fg_color="transparent", hover_color=PANEL, text_color=MUTED,
                       font=("Arial", 10), corner_radius=4,
-                      command=self._copy_tobias_url
-                      ).grid(row=1, column=2, padx=(4, 10), pady=(2, 8))
+                      command=self._copy_tobias_url).pack(side="left")
+        self._tobias_dot = ctk.CTkLabel(tobias_btns, text="●",
+                                         font=("Arial", 12), text_color=MUTED)
+        self._tobias_dot.pack(side="left", padx=(4, 0))
+
+        # Firewall row
+        ctk.CTkLabel(url_row, text="Firewall:", font=("Arial", 10),
+                     text_color=MUTED).grid(row=2, column=0, padx=(12, 6), pady=3, sticky="w")
+        self._fw_lbl = ctk.CTkLabel(url_row, text="Checking…",
+                                     font=("Arial", 10), text_color=MUTED, anchor="w")
+        self._fw_lbl.grid(row=2, column=1, sticky="w", pady=3)
+        self._fw_btn = ctk.CTkButton(url_row, text="Open port", width=80, height=22,
+                                      fg_color=ACCENT, hover_color=ACCENT_HV, text_color=TEXT,
+                                      font=("Arial", 10), corner_radius=4,
+                                      command=self._fix_firewall)
+        self._fw_btn.grid(row=2, column=2, padx=(4, 10), pady=3)
+
+        # Live Share tip
+        ctk.CTkLabel(url_row,
+                     text="💡 Remote? VS Code → Live Share → Share Server → port 3100",
+                     font=("Arial", 9), text_color=MUTED, anchor="w"
+                     ).grid(row=3, column=0, columnspan=3,
+                            padx=12, pady=(4, 10), sticky="w")
 
         # ── AI Backend ────────────────────────────────────────────────────────
         ai_card = ctk.CTkFrame(self, fg_color=PANEL, corner_radius=12)
@@ -3675,6 +3700,7 @@ class PaperclipFrame(ctk.CTkFrame):
         # Initial state refresh
         self.after(300, self._refresh_status)
         self.after(500, self._refresh_tobias_url)
+        self.after(900, self._check_firewall_status)
 
     # ── Helpers ───────────────────────────────────────────────────────────────
 
@@ -3720,6 +3746,36 @@ class PaperclipFrame(ctk.CTkFrame):
     def _refresh_tobias_url(self):
         url = self._pm.get_tobias_url()
         self._tobias_lbl.configure(text=url)
+
+    def _check_firewall_status(self):
+        def _do():
+            return self._pm.check_firewall_rule()
+
+        def _done(ok):
+            if ok:
+                self._fw_lbl.configure(text="● Port 3100 open — Tobias can connect", text_color=GREEN)
+                self._fw_btn.configure(state="disabled", text="Active", fg_color=PANEL2)
+                self._tobias_dot.configure(text_color=GREEN)
+            else:
+                self._fw_lbl.configure(text="● Blocked — click Open port to fix", text_color=RED_LIGHT)
+                self._fw_btn.configure(state="normal", text="Open port", fg_color=ACCENT)
+                self._tobias_dot.configure(text_color=RED_LIGHT)
+
+        run_in_thread(_do, lambda r: self.after(0, lambda: _done(r)))
+
+    def _fix_firewall(self):
+        self._fw_btn.configure(state="disabled", text="Opening…")
+        self._fw_lbl.configure(text="Adding rule…", text_color=GOLD)
+
+        def _do():
+            return self._pm.ensure_firewall_rule()
+
+        def _done(result):
+            ok, msg = result
+            self._log_msg(msg)
+            self._check_firewall_status()
+
+        run_in_thread(_do, lambda r: self.after(0, lambda: _done(r)))
 
     # ── Prerequisites ─────────────────────────────────────────────────────────
 

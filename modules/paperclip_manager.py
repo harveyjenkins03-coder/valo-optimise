@@ -310,3 +310,28 @@ class PaperclipManager:
 
     def get_tobias_url(self) -> str:
         return f"http://{self.get_local_ip()}:{SERVER_PORT}"
+
+    # ── Firewall ──────────────────────────────────────────────────────────────
+
+    _FW_RULE = "Paperclip AI (port 3100)"
+
+    def check_firewall_rule(self) -> bool:
+        """Return True if the inbound allow rule for port 3100 exists."""
+        rc, out, _ = _run(
+            f'netsh advfirewall firewall show rule name="{self._FW_RULE}"',
+            timeout=6,
+        )
+        return rc == 0 and "No rules match" not in out
+
+    def ensure_firewall_rule(self) -> tuple[bool, str]:
+        """Add inbound firewall rule for port 3100 (works when app runs as admin)."""
+        if self.check_firewall_rule():
+            return True, "Firewall rule already active."
+        rc, _, err = _run(
+            f'netsh advfirewall firewall add rule name="{self._FW_RULE}" '
+            f"dir=in action=allow protocol=TCP localport={SERVER_PORT}",
+            timeout=10,
+        )
+        if rc == 0:
+            return True, f"Firewall rule added — Tobias can now connect on port {SERVER_PORT}."
+        return False, f"Could not add firewall rule: {err[:120]}"
