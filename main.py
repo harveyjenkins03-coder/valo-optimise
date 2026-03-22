@@ -3,6 +3,28 @@ import os
 import json
 import threading
 import datetime
+import subprocess
+from tkinter import filedialog
+
+# ── Hide all subprocess console windows app-wide ──────────────────────────────
+# Patch subprocess.run / subprocess.Popen BEFORE any module imports so every
+# powershell / sc / powercfg / netsh call is silently hidden.  Uses .setdefault
+# so callers that already pass creationflags are left unchanged.
+_NW = subprocess.CREATE_NO_WINDOW
+_orig_run   = subprocess.run
+_orig_Popen = subprocess.Popen
+
+def _run_hidden(*a, **kw):
+    kw.setdefault("creationflags", _NW)
+    return _orig_run(*a, **kw)
+
+def _Popen_hidden(*a, **kw):
+    kw.setdefault("creationflags", _NW)
+    return _orig_Popen(*a, **kw)
+
+subprocess.run   = _run_hidden
+subprocess.Popen = _Popen_hidden
+# ─────────────────────────────────────────────────────────────────────────────
 
 # Ensure project root is on the path so modules/ and utils/ resolve correctly
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
@@ -11,6 +33,9 @@ import customtkinter as ctk
 
 from utils.admin_check import require_admin, get_admin_status_label
 from utils import backup_manager
+from utils.compat import set_dpi_awareness, sanitize_input, sanitize_riot_id, get_version_display
+from utils.anim  import count_up, ease_progress, Pulse, flash_bg, fade_in_window
+import psutil as _psutil  # available app-wide for live stats
 from modules.system_optimizer import SystemOptimizer
 from modules.network_optimizer import NetworkOptimizer
 from modules.registry_tweaks import RegistryTweaks, TWEAKS
@@ -28,6 +53,8 @@ from modules.mouse_driver import (
     PollingRateMonitor, PointerBallistics,
     SensitivityProfileManager, MouseDeviceInfo, RawInputChecker,
 )
+from modules.benchmark import SystemBenchmark, METRIC_ORDER
+from modules.paperclip_manager import PaperclipManager
 
 # ── Colors ───────────────────────────────────────────────────────────────────
 BG        = "#0a0e1a"   # deeper navy black
@@ -42,6 +69,10 @@ MUTED     = "#6b7a99"   # muted text
 GREEN     = "#00d4aa"   # teal green (premium)
 RED_LIGHT = "#ff6b6b"
 GOLD      = "#ffd700"   # for scores/achievements
+
+SIDEBAR_BG  = "#060a12"   # deepest navy — sidebar background
+SIDEBAR_ACT = "#0f1e30"   # active tab background in sidebar
+BORDER      = "#1e2d42"   # card borders / separators
 
 CONFIG_PATH = os.path.join(os.path.dirname(os.path.abspath(__file__)), "config.json")
 
@@ -93,10 +124,14 @@ def run_in_thread(func, callback, *args):
 
 # ── Shared Widgets ────────────────────────────────────────────────────────────
 
-def make_section_label(parent, text: str) -> ctk.CTkLabel:
-    lbl = ctk.CTkLabel(parent, text=text, font=("Arial", 13, "bold"),
-                        text_color=ACCENT, anchor="w")
-    return lbl
+def make_section_label(parent, text: str) -> ctk.CTkFrame:
+    """Section header with a 3 px ACCENT left bar."""
+    f = ctk.CTkFrame(parent, fg_color="transparent")
+    ctk.CTkFrame(f, width=3, height=14, fg_color=ACCENT,
+                 corner_radius=2).pack(side="left", padx=(0, 8), pady=2)
+    ctk.CTkLabel(f, text=text, font=("Arial", 12, "bold"),
+                 text_color=TEXT, anchor="w").pack(side="left")
+    return f
 
 
 def make_status_box(parent, height=120) -> ctk.CTkTextbox:
@@ -128,8 +163,31 @@ def ghost_button(parent, text, command, width=160) -> ctk.CTkButton:
         parent, text=text, command=command, width=width,
         fg_color="transparent", hover_color=PANEL2, text_color=MUTED,
         font=("Arial", 12), corner_radius=8,
-        border_width=1, border_color=PANEL2, height=36
+        border_width=1, border_color=BORDER, height=36
     )
+
+
+def _win_toast(title: str, msg: str):
+    """Fire a Windows toast notification via PowerShell. Silent on failure."""
+    try:
+        script = (
+            "[Windows.UI.Notifications.ToastNotificationManager,"
+            "Windows.UI.Notifications,ContentType=WindowsRuntime]>$null;"
+            "$t=[Windows.UI.Notifications.ToastTemplateType]::ToastText02;"
+            "$x=[Windows.UI.Notifications.ToastNotificationManager]::GetTemplateContent($t);"
+            "$n=$x.GetElementsByTagName('text');"
+            f"$n[0].AppendChild($x.CreateTextNode('{title}'))>$null;"
+            f"$n[1].AppendChild($x.CreateTextNode('{msg}'))>$null;"
+            "$toast=[Windows.UI.Notifications.ToastNotification]::new($x);"
+            "[Windows.UI.Notifications.ToastNotificationManager]::"
+            "CreateToastNotifier('Valo Optimise').Show($toast)"
+        )
+        subprocess.Popen(
+            ["powershell", "-WindowStyle", "Hidden", "-Command", script],
+            creationflags=subprocess.CREATE_NO_WINDOW
+        )
+    except Exception:
+        pass
 
 
 # ══════════════════════════════════════════════════════════════════════════════
@@ -473,6 +531,9 @@ class NetworkFrame(ctk.CTkFrame):
         self.cfg = cfg
         self.net = NetworkOptimizer()
         self._ping_results = {}
+        self._ping_running = False
+        self._ping_thread = None
+        self._ping_labels = {}
         self._build()
 
     def _build(self):
@@ -563,10 +624,38 @@ class NetworkFrame(ctk.CTkFrame):
                      ).grid(row=2, column=0, columnspan=3, sticky="w", padx=14, pady=(0, 10))
         self._refresh_nic_power()
 
+        # ── Live Server Ping Monitor ──
+        lp = ctk.CTkFrame(self, fg_color=PANEL, corner_radius=10)
+        lp.grid(row=7, column=0, sticky="ew", padx=20, pady=6)
+        lp.grid_columnconfigure(0, weight=1)
+        make_section_label(lp, "📡  Live Server Ping").grid(row=0, column=0, columnspan=4, sticky="w", padx=14, pady=(10, 4))
+
+        _live_servers = [
+            ("EU", "185.40.64.69"),
+            ("NA", "198.108.100.197"),
+            ("AP", "111.220.144.199"),
+        ]
+        for s_i, (region, ip) in enumerate(_live_servers):
+            ctk.CTkLabel(lp, text=region, font=("Arial", 11, "bold"),
+                         text_color=TEXT, width=40, anchor="w").grid(row=s_i + 1, column=0, padx=(14, 4), pady=2, sticky="w")
+            ctk.CTkLabel(lp, text=ip, font=("Consolas", 10),
+                         text_color=MUTED, anchor="w").grid(row=s_i + 1, column=1, padx=(0, 12), pady=2, sticky="w")
+            ping_val = ctk.CTkLabel(lp, text="--", font=("Arial", 12, "bold"),
+                                    text_color=MUTED, width=80, anchor="w")
+            ping_val.grid(row=s_i + 1, column=2, padx=(0, 14), pady=2, sticky="w")
+            self._ping_labels[region] = ping_val
+
+        lp_btn_row = ctk.CTkFrame(lp, fg_color="transparent")
+        lp_btn_row.grid(row=4, column=0, columnspan=4, sticky="w", padx=14, pady=(4, 10))
+        self._live_ping_btn = accent_button(lp_btn_row, "▶  Start Live Ping", self._toggle_live_ping, width=160)
+        self._live_ping_btn.grid(row=0, column=0, padx=(0, 8))
+        ctk.CTkLabel(lp_btn_row, text="Updates every 2 s  |  <50 ms=green  50-100 ms=gold  >100 ms=red",
+                     text_color=MUTED, font=("Arial", 10)).grid(row=0, column=1, padx=(4, 0))
+
         # ── Log ──
-        make_section_label(self, "Status Log").grid(row=7, column=0, sticky="w", padx=20, pady=(10, 2))
+        make_section_label(self, "Status Log").grid(row=8, column=0, sticky="w", padx=20, pady=(10, 2))
         self.log = make_status_box(self, height=100)
-        self.log.grid(row=8, column=0, sticky="ew", padx=20, pady=(0, 16))
+        self.log.grid(row=9, column=0, sticky="ew", padx=20, pady=(0, 16))
 
     def _build_ping_rows(self):
         for widget in self.ping_frame.winfo_children():
@@ -680,6 +769,81 @@ class NetworkFrame(ctk.CTkFrame):
             log_to_box(self.log, r[1], r[0])
             self._refresh_nic_power()
         run_in_thread(_do, lambda r: self.after(0, lambda: _done(r)))
+
+    # ── Live Ping Monitor ─────────────────────────────────────────────────────
+
+    _LIVE_SERVERS = [
+        ("EU", "185.40.64.69"),
+        ("NA", "198.108.100.197"),
+        ("AP", "111.220.144.199"),
+    ]
+
+    def _toggle_live_ping(self):
+        if self._ping_running:
+            self._ping_running = False
+            self._live_ping_btn.configure(text="▶  Start Live Ping", fg_color=ACCENT)
+            log_to_box(self.log, "Live ping monitor stopped.", True)
+        else:
+            self._ping_running = True
+            self._live_ping_btn.configure(text="⏹  Stop Live Ping", fg_color=MUTED)
+            log_to_box(self.log, "Live ping monitor started.", True)
+            self._ping_thread = threading.Thread(target=self._live_ping_loop, daemon=True)
+            self._ping_thread.start()
+
+    def _live_ping_loop(self):
+        while self._ping_running:
+            for region, ip in self._LIVE_SERVERS:
+                if not self._ping_running:
+                    break
+                ms = self._ping_once(ip)
+                self.after(0, lambda r=region, m=ms: self._update_ping_label(r, m))
+            # wait 2 seconds between rounds, checking stop flag every 0.2 s
+            for _ in range(10):
+                if not self._ping_running:
+                    break
+                threading.Event().wait(0.2)
+
+    def _ping_once(self, ip: str) -> int:
+        """Return average ping in ms, or -1 on timeout/error."""
+        try:
+            result = subprocess.run(
+                ["ping", "-n", "1", "-w", "1000", ip],
+                capture_output=True, text=True, timeout=3,
+                creationflags=subprocess.CREATE_NO_WINDOW
+            )
+            for line in result.stdout.splitlines():
+                line_l = line.lower()
+                if "average" in line_l or "durchschnitt" in line_l:
+                    # "Average = 42ms"
+                    parts = line.split("=")
+                    if parts:
+                        val = parts[-1].strip().replace("ms", "").strip()
+                        if val.isdigit():
+                            return int(val)
+                # also handle single-packet "time=42ms"
+                if "time=" in line_l or "time<" in line_l:
+                    for tok in line.split():
+                        tok_l = tok.lower()
+                        if tok_l.startswith("time="):
+                            try:
+                                return int(tok_l.replace("time=", "").replace("ms", ""))
+                            except ValueError:
+                                pass
+                        elif tok_l.startswith("time<"):
+                            return 1
+        except Exception:
+            pass
+        return -1
+
+    def _update_ping_label(self, region: str, ms: int):
+        lbl = self._ping_labels.get(region)
+        if not lbl:
+            return
+        if ms < 0:
+            lbl.configure(text="Timeout", text_color=MUTED)
+        else:
+            color = GREEN if ms < 50 else (GOLD if ms < 100 else ACCENT)
+            lbl.configure(text=f"{ms} ms", text_color=color)
 
 
 # ══════════════════════════════════════════════════════════════════════════════
@@ -891,7 +1055,7 @@ class StatsFrame(ctk.CTkFrame):
         self.match_scroll.grid(row=1, column=0, sticky="ew", padx=14, pady=(0, 10))
 
     def _lookup(self):
-        riot_id = self.id_entry.get().strip()
+        riot_id = sanitize_riot_id(self.id_entry.get())
         region  = self.region_var.get().strip()
         if not riot_id:
             self.error_label.configure(text="Please enter a Riot ID.")
@@ -1031,102 +1195,524 @@ class GuideFrame(ctk.CTkFrame):
 
 
 # ══════════════════════════════════════════════════════════════════════════════
+# PERFORMANCE BENCHMARK FRAME
+# ══════════════════════════════════════════════════════════════════════════════
+
+class BenchmarkFrame(ctk.CTkFrame):
+    """Before/after competitive readiness report with 12 measurable OS metrics."""
+
+    def __init__(self, parent, cfg):
+        super().__init__(parent, fg_color=BG)
+        self.cfg  = cfg
+        self._bm  = SystemBenchmark()
+        self._current_metrics: dict = {}
+        self._current_score:   int  = 0
+        self._scanning         = False
+        self._build()
+        # Kick off an initial scan after the window is drawn
+        self.after(300, self._start_scan)
+
+    # ── Build UI ──────────────────────────────────────────────────────────────
+
+    def _build(self):
+        self.grid_columnconfigure(0, weight=1)
+
+        # ── Page title ──
+        ctk.CTkLabel(self, text="Performance Report",
+                     font=("Arial", 20, "bold"), text_color=TEXT
+                     ).grid(row=0, column=0, sticky="w", padx=20, pady=(16, 2))
+        ctk.CTkLabel(self,
+                     text="Live before/after comparison — see exactly what each tweak improves.",
+                     font=("Arial", 11), text_color=MUTED
+                     ).grid(row=1, column=0, sticky="w", padx=20, pady=(0, 8))
+
+        # ── Score hero card ──
+        hero = ctk.CTkFrame(self, fg_color=PANEL3, corner_radius=14)
+        hero.grid(row=2, column=0, sticky="ew", padx=20, pady=(0, 8))
+        hero.grid_columnconfigure(1, weight=1)
+        ctk.CTkFrame(hero, fg_color=ACCENT, height=3, corner_radius=0).grid(
+            row=0, column=0, columnspan=3, sticky="ew")
+
+        inner = ctk.CTkFrame(hero, fg_color="transparent")
+        inner.grid(row=1, column=0, columnspan=3, padx=20, pady=(12, 16), sticky="ew")
+        inner.grid_columnconfigure(1, weight=1)
+
+        # Big score
+        score_col = ctk.CTkFrame(inner, fg_color="transparent")
+        score_col.grid(row=0, column=0, sticky="w", padx=(0, 24))
+        self._score_num = ctk.CTkLabel(score_col, text="—", font=("Arial", 52, "bold"),
+                                        text_color=GOLD)
+        self._score_num.pack()
+        ctk.CTkLabel(score_col, text="out of 100", font=("Arial", 10),
+                     text_color=MUTED).pack()
+
+        # Grade + bar + snapshot info
+        mid_col = ctk.CTkFrame(inner, fg_color="transparent")
+        mid_col.grid(row=0, column=1, sticky="ew")
+        mid_col.grid_columnconfigure(0, weight=1)
+
+        self._grade_label = ctk.CTkLabel(mid_col, text="SCANNING...",
+                                          font=("Arial", 18, "bold"), text_color=MUTED)
+        self._grade_label.grid(row=0, column=0, sticky="w")
+
+        self._score_bar = ctk.CTkProgressBar(mid_col, height=12,
+                                              progress_color=ACCENT, fg_color=PANEL2,
+                                              corner_radius=6)
+        self._score_bar.set(0)
+        self._score_bar.grid(row=1, column=0, sticky="ew", pady=(8, 0))
+
+        self._snap_label = ctk.CTkLabel(mid_col, text="",
+                                         font=("Arial", 10), text_color=MUTED)
+        self._snap_label.grid(row=2, column=0, sticky="w", pady=(6, 0))
+
+        self._delta_label = ctk.CTkLabel(mid_col, text="",
+                                          font=("Arial", 13, "bold"), text_color=GREEN)
+        self._delta_label.grid(row=3, column=0, sticky="w", pady=(2, 0))
+
+        # Buttons
+        btn_col = ctk.CTkFrame(inner, fg_color="transparent")
+        btn_col.grid(row=0, column=2, sticky="ne", padx=(16, 0))
+        self._scan_btn = accent_button(btn_col, "🔍  Scan Now", self._start_scan, width=150)
+        self._scan_btn.pack(pady=(0, 6))
+        ghost_button(btn_col, "💾  Save Snapshot", self._save_snapshot, width=150).pack(pady=(0, 6))
+        ghost_button(btn_col, "✕  Clear Snapshot", self._clear_snapshot, width=150).pack()
+
+        # ── Column headers ──
+        hdr = ctk.CTkFrame(self, fg_color="transparent")
+        hdr.grid(row=3, column=0, sticky="ew", padx=20, pady=(4, 0))
+        hdr.grid_columnconfigure(0, weight=0)   # icon
+        hdr.grid_columnconfigure(1, weight=3)   # metric
+        hdr.grid_columnconfigure(2, weight=2)   # current
+        hdr.grid_columnconfigure(3, weight=2)   # snapshot / optimal
+        hdr.grid_columnconfigure(4, weight=2)   # optimal
+        hdr.grid_columnconfigure(5, weight=1)   # status
+        hdr.grid_columnconfigure(6, weight=1)   # impact
+
+        def _hdr(col, text, anchor="w"):
+            ctk.CTkLabel(hdr, text=text, font=("Arial", 10, "bold"),
+                         text_color=MUTED, anchor=anchor
+                         ).grid(row=0, column=col, sticky="ew", padx=6, pady=4)
+
+        _hdr(1, "METRIC")
+        _hdr(2, "CURRENT")
+        self._snap_hdr = ctk.CTkLabel(hdr, text="", font=("Arial", 10, "bold"),
+                                       text_color=MUTED, anchor="w")
+        self._snap_hdr.grid(row=0, column=3, sticky="ew", padx=6)
+        _hdr(4, "OPTIMAL")
+        _hdr(5, "STATUS", anchor="center")
+        _hdr(6, "IMPACT",  anchor="center")
+
+        # Divider
+        ctk.CTkFrame(self, fg_color=PANEL2, height=1).grid(
+            row=4, column=0, sticky="ew", padx=20, pady=(0, 4))
+
+        # ── Scrollable metric rows ──
+        scroll = ctk.CTkScrollableFrame(self, fg_color=BG, corner_radius=0, height=340)
+        scroll.grid(row=5, column=0, sticky="ew", padx=20, pady=(0, 8))
+        scroll.grid_columnconfigure(0, weight=0)
+        scroll.grid_columnconfigure(1, weight=3)
+        scroll.grid_columnconfigure(2, weight=2)
+        scroll.grid_columnconfigure(3, weight=2)
+        scroll.grid_columnconfigure(4, weight=2)
+        scroll.grid_columnconfigure(5, weight=1)
+        scroll.grid_columnconfigure(6, weight=1)
+        self._scroll = scroll
+        self._row_widgets: dict = {}   # key -> {current_lbl, snap_lbl, status_lbl, row_frame}
+        self._build_metric_rows()
+
+        # ── Why-it-matters expandable panel ──
+        why_card = ctk.CTkFrame(self, fg_color=PANEL, corner_radius=10)
+        why_card.grid(row=6, column=0, sticky="ew", padx=20, pady=(0, 8))
+        why_card.grid_columnconfigure(0, weight=1)
+        make_section_label(why_card, "ℹ️  Why These Metrics Matter").grid(
+            row=0, column=0, sticky="w", padx=14, pady=(10, 4))
+        ctk.CTkLabel(
+            why_card,
+            text=(
+                "Timer Resolution governs how often Windows delivers a clock tick to game threads — "
+                "default 15.6 ms means up to 15.6 ms of input delay baked into every frame.\n"
+                "Core Parking and CPU Boost prevent the CPU from dropping to idle clocks mid-fight. "
+                "Mouse Acceleration adds a velocity curve so faster flicks overshoot the target. "
+                "Together, these directly reduce the gap between what you do and what the server sees."
+            ),
+            font=("Arial", 10), text_color=MUTED,
+            wraplength=720, justify="left",
+        ).grid(row=1, column=0, sticky="w", padx=14, pady=(0, 12))
+
+    def _build_metric_rows(self):
+        """Create one row widget set per metric; values filled in by _apply_results."""
+        for i, key in enumerate(METRIC_ORDER):
+            row_bg = PANEL if i % 2 == 0 else PANEL2
+            rf = ctk.CTkFrame(self._scroll, fg_color=row_bg, corner_radius=8)
+            rf.grid(row=i, column=0, columnspan=7, sticky="ew", pady=2)
+            rf.grid_columnconfigure(0, weight=0)
+            rf.grid_columnconfigure(1, weight=3)
+            rf.grid_columnconfigure(2, weight=2)
+            rf.grid_columnconfigure(3, weight=2)
+            rf.grid_columnconfigure(4, weight=2)
+            rf.grid_columnconfigure(5, weight=1)
+            rf.grid_columnconfigure(6, weight=1)
+
+            from modules.benchmark import _ICONS, _LABELS, _OPTIMAL_DESC, _IMPACT
+            ctk.CTkLabel(rf, text=_ICONS[key], font=("Arial", 14),
+                         width=28).grid(row=0, column=0, padx=(10, 2), pady=8, sticky="w")
+            ctk.CTkLabel(rf, text=_LABELS[key], font=("Arial", 11, "bold"),
+                         text_color=TEXT, anchor="w"
+                         ).grid(row=0, column=1, padx=4, pady=8, sticky="ew")
+
+            cur_lbl = ctk.CTkLabel(rf, text="—", font=("Arial", 11),
+                                    text_color=MUTED, anchor="w")
+            cur_lbl.grid(row=0, column=2, padx=4, pady=8, sticky="ew")
+
+            snap_lbl = ctk.CTkLabel(rf, text="", font=("Arial", 10),
+                                     text_color=MUTED, anchor="w")
+            snap_lbl.grid(row=0, column=3, padx=4, pady=8, sticky="ew")
+
+            ctk.CTkLabel(rf, text=_OPTIMAL_DESC[key], font=("Arial", 10),
+                         text_color=MUTED, anchor="w"
+                         ).grid(row=0, column=4, padx=4, pady=8, sticky="ew")
+
+            status_lbl = ctk.CTkLabel(rf, text="●", font=("Arial", 16),
+                                       text_color=MUTED, anchor="center")
+            status_lbl.grid(row=0, column=5, padx=4, pady=8, sticky="ew")
+
+            impact_color = {"HIGH": RED_LIGHT, "MEDIUM": GOLD, "LOW": MUTED}[_IMPACT[key]]
+            ctk.CTkLabel(rf, text=_IMPACT[key], font=("Arial", 9, "bold"),
+                         text_color=impact_color, anchor="center"
+                         ).grid(row=0, column=6, padx=(4, 10), pady=8, sticky="ew")
+
+            self._row_widgets[key] = {
+                "current_lbl": cur_lbl,
+                "snap_lbl":    snap_lbl,
+                "status_lbl":  status_lbl,
+            }
+
+    # ── Scan logic ────────────────────────────────────────────────────────────
+
+    def _start_scan(self):
+        if self._scanning:
+            return
+        self._scanning = True
+        self._scan_btn.configure(state="disabled", text="Scanning...")
+        self._grade_label.configure(text="SCANNING...", text_color=MUTED)
+
+        def _do():
+            return self._bm.collect()
+
+        def _done(metrics):
+            self._scanning = False
+            self._scan_btn.configure(state="normal", text="🔍  Scan Now")
+            self._current_metrics = metrics
+            self._current_score   = self._bm.compute_score(metrics)
+            self._apply_results(metrics)
+
+        run_in_thread(_do, lambda r: self.after(0, lambda: _done(r)))
+
+    def _apply_results(self, metrics: dict):
+        score  = self._current_score
+        grade, color = self._bm.score_grade(score)
+        snap   = self._bm.load_snapshot()
+
+        # Update score hero
+        self._score_num.configure(text=str(score), text_color=color)
+        self._grade_label.configure(text=grade, text_color=color)
+        self._score_bar.configure(progress_color=color)
+        self._score_bar.set(score / 100)
+
+        # Snapshot delta
+        if snap:
+            before = snap.get("score", 0)
+            ts     = snap.get("timestamp", "")[:16].replace("T", " ")
+            delta  = score - before
+            delta_str = f"+{delta}" if delta >= 0 else str(delta)
+            delta_color = GREEN if delta > 0 else (RED_LIGHT if delta < 0 else MUTED)
+            self._snap_label.configure(
+                text=f"Snapshot from {ts}  —  Before: {before}/100",
+                text_color=MUTED)
+            self._delta_label.configure(
+                text=f"Improvement: {delta_str} points ({before} → {score})",
+                text_color=delta_color)
+            self._snap_hdr.configure(text="BEFORE")
+        else:
+            self._snap_label.configure(text="No snapshot saved yet. Tweak, then save a snapshot first.")
+            self._delta_label.configure(text="")
+            self._snap_hdr.configure(text="")
+
+        # Update each row
+        for key, wdg in self._row_widgets.items():
+            m = metrics.get(key)
+            if not m:
+                continue
+            passed = m.get("passed", False)
+            val    = m.get("value", "—")
+
+            wdg["current_lbl"].configure(
+                text=val,
+                text_color=GREEN if passed else RED_LIGHT,
+            )
+            wdg["status_lbl"].configure(
+                text="✓" if passed else "✗",
+                text_color=GREEN if passed else RED_LIGHT,
+            )
+
+            # Snapshot column
+            if snap and key in snap.get("metrics", {}):
+                before_m = snap["metrics"][key]
+                before_val    = before_m.get("value", "—")
+                before_passed = before_m.get("passed", False)
+                # Show improvement arrow if status changed
+                if before_passed and passed:
+                    snap_text = before_val
+                    snap_color = GREEN
+                elif not before_passed and passed:
+                    snap_text  = f"{before_val}  →  FIXED"
+                    snap_color = GREEN
+                elif before_passed and not passed:
+                    snap_text  = f"{before_val}  →  REGRESSED"
+                    snap_color = RED_LIGHT
+                else:
+                    snap_text  = before_val
+                    snap_color = MUTED
+                wdg["snap_lbl"].configure(text=snap_text, text_color=snap_color)
+            else:
+                wdg["snap_lbl"].configure(text="", text_color=MUTED)
+
+    # ── Snapshot actions ──────────────────────────────────────────────────────
+
+    def _save_snapshot(self):
+        if not self._current_metrics:
+            return
+        self._bm.save_snapshot(self._current_metrics, self._current_score)
+        self._apply_results(self._current_metrics)
+        _win_toast("Valo Optimise",
+                   f"Snapshot saved — score {self._current_score}/100. "
+                   "Apply tweaks then re-scan to see improvement.")
+
+    def _clear_snapshot(self):
+        self._bm.delete_snapshot()
+        if self._current_metrics:
+            self._apply_results(self._current_metrics)
+
+
+# ══════════════════════════════════════════════════════════════════════════════
 # PRE-GAME BOOST FRAME
 # ══════════════════════════════════════════════════════════════════════════════
 
 class BoostFrame(ctk.CTkFrame):
+    """Pre-Game Boost with animated per-step checklist and live progress bar."""
+
+    _STEPS = [
+        ("pwr",   "⚡", "Ultimate Power Plan",  "Sets CPU to maximum performance mode"),
+        ("bg",    "🧹", "Kill Background Apps", "Frees CPU & RAM from non-essential processes"),
+        ("ram",   "🧠", "Clear Standby RAM",    "Flushes cached memory back to available pool"),
+        ("reg",   "🔧", "Registry Tweaks",      "Applies MMCSS & TCP performance tweaks"),
+        ("park",  "⏱", "Disable Core Parking", "Prevents CPU cores sleeping mid-fight"),
+        ("timer", "⏲", "1ms Timer Resolution",  "Reduces input & frame timing from 15.6ms → 1ms"),
+        ("vis",   "👁", "Visibility Preset",    "Applies competitive colour profile"),
+    ]
+
     def __init__(self, parent, cfg):
         super().__init__(parent, fg_color=BG)
         self.cfg = cfg
         self._sys = SystemOptimizer()
         self._rt  = RegistryTweaks()
         self._cpu = CpuTimerOptimizer()
+        self._boost_running = False
+        self._step_icon_lbls: dict  = {}
+        self._step_msg_lbls:  dict  = {}
+        self._step_row_frames: dict = {}
+        self._step_row_bgs:    dict = {}
         self._build()
 
     def _build(self):
         self.grid_columnconfigure(0, weight=1)
 
+        # ── Header ──
         ctk.CTkLabel(self, text="Pre-Game Boost", font=("Arial", 20, "bold"),
-                     text_color=TEXT).grid(row=0, column=0, sticky="w", padx=20, pady=(16, 4))
-        ctk.CTkLabel(self, text="One-click sequence to maximise performance before launching Valorant.",
-                     font=("Arial", 11), text_color=MUTED).grid(row=1, column=0, sticky="w", padx=20, pady=(0, 10))
+                     text_color=TEXT).grid(row=0, column=0, sticky="w", padx=20, pady=(16, 2))
+        ctk.CTkLabel(self,
+                     text="One-click sequence — watch each optimisation complete in real time.",
+                     font=("Arial", 11), text_color=MUTED
+                     ).grid(row=1, column=0, sticky="w", padx=20, pady=(0, 10))
 
-        bf = ctk.CTkFrame(self, fg_color=PANEL, corner_radius=10)
-        bf.grid(row=2, column=0, sticky="ew", padx=20, pady=6)
-        bf.grid_columnconfigure(0, weight=1)
-        make_section_label(bf, "🚀  Quick Boost").grid(row=0, column=0, sticky="w", padx=14, pady=(10, 4))
-        ctk.CTkLabel(bf,
-            text="Runs: Ultimate Power Plan → Kill Background Apps → Clear RAM → Registry Tweaks → Core Parking Off → 1ms Timer → Visibility Preset",
-            text_color=MUTED, font=("Arial", 10), wraplength=700, justify="left"
-        ).grid(row=1, column=0, sticky="w", padx=14, pady=(0, 8))
+        # ── Main card ──
+        card = ctk.CTkFrame(self, fg_color=PANEL, corner_radius=12)
+        card.grid(row=2, column=0, sticky="ew", padx=20, pady=6)
+        card.grid_columnconfigure(0, weight=1)
+        ctk.CTkFrame(card, fg_color=ACCENT, height=3, corner_radius=0).grid(
+            row=0, column=0, sticky="ew")
 
-        btn_row = ctk.CTkFrame(bf, fg_color="transparent")
-        btn_row.grid(row=2, column=0, sticky="w", padx=14, pady=(0, 12))
+        inner = ctk.CTkFrame(card, fg_color="transparent")
+        inner.grid(row=1, column=0, padx=18, pady=(14, 16), sticky="ew")
+        inner.grid_columnconfigure(0, weight=1)
+
+        # Button row
+        btn_row = ctk.CTkFrame(inner, fg_color="transparent")
+        btn_row.grid(row=0, column=0, sticky="w")
         self._boost_btn = ctk.CTkButton(
             btn_row, text="⚡  LAUNCH BOOST", command=self._run_boost,
-            width=300, height=60, font=("Arial", 18, "bold"),
-            fg_color=ACCENT, hover_color=ACCENT_HV, corner_radius=12, text_color=TEXT
+            width=240, height=54, font=("Arial", 16, "bold"),
+            fg_color=ACCENT, hover_color=ACCENT_HV, corner_radius=10, text_color=TEXT
         )
-        self._boost_btn.grid(row=0, column=0, padx=(0, 14))
-        ghost_button(btn_row, "Revert All", self._revert_all, width=120).grid(row=0, column=1)
+        self._boost_btn.grid(row=0, column=0, padx=(0, 12))
+        ghost_button(btn_row, "↩  Revert All", self._revert_all, width=120).grid(row=0, column=1)
+        ctk.CTkLabel(btn_row, text="Global Hotkey: Ctrl+Shift+B", font=("Arial", 9),
+                     text_color=MUTED).grid(row=1, column=0, columnspan=2, sticky="w", pady=(4, 0))
 
-        make_section_label(self, "Boost Log").grid(row=3, column=0, sticky="w", padx=20, pady=(10, 2))
-        self.log = make_status_box(self, height=260)
-        self.log.grid(row=4, column=0, sticky="ew", padx=20, pady=(0, 16))
+        # Progress bar
+        self._progress = ctk.CTkProgressBar(inner, height=8, progress_color=GREEN,
+                                             fg_color=PANEL2, corner_radius=4)
+        self._progress.set(0)
+        self._progress.grid(row=1, column=0, sticky="ew", pady=(14, 10))
+
+        # Animated step checklist
+        steps_frame = ctk.CTkFrame(inner, fg_color=PANEL2, corner_radius=8)
+        steps_frame.grid(row=2, column=0, sticky="ew")
+        steps_frame.grid_columnconfigure(2, weight=1)
+
+        for i, (key, emoji, label, hint) in enumerate(self._STEPS):
+            row_bg = PANEL2 if i % 2 == 0 else "#16243a"
+            rf = ctk.CTkFrame(steps_frame, fg_color=row_bg, corner_radius=0)
+            rf.grid(row=i, column=0, columnspan=4, sticky="ew")
+            rf.grid_columnconfigure(2, weight=1)
+            self._step_row_frames[key] = rf
+            self._step_row_bgs[key]    = row_bg
+
+            ctk.CTkLabel(rf, text=emoji, font=("Arial", 13), width=26,
+                         text_color=MUTED).grid(row=0, column=0, padx=(10, 4), pady=7)
+
+            icon_lbl = ctk.CTkLabel(rf, text="○", font=("Arial", 12, "bold"),
+                                     text_color=MUTED, width=18)
+            icon_lbl.grid(row=0, column=1, padx=(0, 8), pady=7)
+            self._step_icon_lbls[key] = icon_lbl
+
+            ctk.CTkLabel(rf, text=label, font=("Arial", 11, "bold"),
+                         text_color=TEXT, anchor="w").grid(row=0, column=2, sticky="ew", pady=7)
+
+            msg_lbl = ctk.CTkLabel(rf, text=hint, font=("Consolas", 9),
+                                    text_color=MUTED, anchor="e", width=260)
+            msg_lbl.grid(row=0, column=3, padx=(0, 12), pady=7, sticky="e")
+            self._step_msg_lbls[key] = msg_lbl
+
+        # Status line
+        self._status_lbl = ctk.CTkLabel(inner, text="", font=("Arial", 11), text_color=MUTED)
+        self._status_lbl.grid(row=3, column=0, sticky="w", pady=(10, 0))
+
+        # ── Trust footer ──
+        trust = ctk.CTkFrame(self, fg_color="transparent")
+        trust.grid(row=3, column=0, sticky="ew", padx=20, pady=(4, 16))
+        ctk.CTkLabel(trust,
+                     text="✓ Vanguard Safe   ✓ No game process interaction   ✓ All changes are fully reversible",
+                     font=("Arial", 9), text_color=MUTED, anchor="center"
+                     ).pack()
+
+    # ── Step animation helpers ────────────────────────────────────────────────
+
+    def _step_active(self, key: str):
+        lbl = self._step_icon_lbls.get(key)
+        if lbl:
+            lbl.configure(text="⟳", text_color=GOLD)
+
+    def _step_done(self, key: str, ok: bool, msg: str):
+        lbl = self._step_icon_lbls.get(key)
+        if lbl:
+            lbl.configure(text="✓" if ok else "✗", text_color=GREEN if ok else RED_LIGHT)
+        msg_lbl = self._step_msg_lbls.get(key)
+        if msg_lbl:
+            short = msg[:50] if msg else ""
+            msg_lbl.configure(text=short, text_color=GREEN if ok else RED_LIGHT)
+        # Flash row green or red then restore
+        rf   = self._step_row_frames.get(key)
+        orig = self._step_row_bgs.get(key, PANEL2)
+        if rf:
+            flash_bg(rf, "#0d2e18" if ok else "#2e0d12", orig, 600)
+        done_count = sum(1 for l in self._step_icon_lbls.values()
+                         if l.cget("text") in ("✓", "✗"))
+        ease_progress(self._progress, done_count / len(self._STEPS), 400)
+
+    def _reset_steps(self):
+        for lbl in self._step_icon_lbls.values():
+            lbl.configure(text="○", text_color=MUTED)
+        for key, lbl in self._step_msg_lbls.items():
+            hint = next((h for k, _, _, h in self._STEPS if k == key), "")
+            lbl.configure(text=hint, text_color=MUTED)
+        self._progress.set(0)
+        self._status_lbl.configure(text="")
+
+    # ── Boost sequence ────────────────────────────────────────────────────────
 
     def _run_boost(self):
+        if self._boost_running:
+            return
+        self._boost_running = True
         self._boost_btn.configure(state="disabled", text="Running...")
-        log_to_box(self.log, "Starting Pre-Game Boost sequence...", True)
+        self._reset_steps()
+        self._status_lbl.configure(text="Optimising your system — this takes ~10 seconds...", text_color=MUTED)
+
+        def _activate(k):
+            self.after(0, lambda key=k: self._step_active(key))
+
+        def _finish_step(k, ok, msg):
+            self.after(0, lambda key=k, o=ok, m=msg: self._step_done(key, o, m))
 
         def _do():
-            steps = []
+            _activate("pwr")
             ok, msg = self._sys.set_ultimate_performance_plan()
-            steps.append(("⚡ Ultimate Power Plan", ok, msg))
+            _finish_step("pwr", ok, msg)
 
+            _activate("bg")
             killed = self._sys.kill_all_background_targets()
-            n_killed = sum(1 for _, o, _ in killed if o) if killed else 0
-            steps.append(("🧹 Kill Background Apps", True,
-                          f"Killed {n_killed} processes" if n_killed else "No background targets running"))
+            n = sum(1 for _, o, _ in killed if o) if killed else 0
+            _finish_step("bg", True, f"Killed {n} processes" if n else "No targets running")
 
+            _activate("ram")
             ok, msg = self._sys.clear_standby_memory()
-            steps.append(("🧠 Clear Standby RAM", ok, msg))
+            _finish_step("ram", ok, msg)
 
-            tweak_results = self._rt.apply_all_tweaks()
-            n_ok = sum(1 for _, o, _ in tweak_results if o)
-            steps.append(("🔧 Registry Tweaks", True, f"{n_ok}/{len(tweak_results)} tweaks applied"))
+            _activate("reg")
+            tw = self._rt.apply_all_tweaks()
+            n_ok = sum(1 for _, o, _ in tw if o)
+            _finish_step("reg", True, f"{n_ok}/{len(tw)} tweaks applied")
 
+            _activate("park")
             ok, msg = self._cpu.disable_core_parking()
-            steps.append(("⏱️ Core Parking Off", ok, msg))
+            _finish_step("park", ok, msg)
 
+            _activate("timer")
             ok, msg = self._cpu.set_timer_resolution_1ms()
-            steps.append(("⏱️ 1ms Timer", ok, msg))
+            _finish_step("timer", ok, msg)
 
+            _activate("vis")
             vis_preset = self.cfg.get("visibility_preset", "Competitive")
             ok, msg = VisibilityOptimizer().apply_preset(vis_preset)
-            steps.append(("👁️ Visibility", ok, msg))
+            _finish_step("vis", ok, msg)
 
-            return steps
+        def _complete(_):
+            self._boost_running = False
+            self._boost_btn.configure(state="normal", text="⚡  LAUNCH BOOST")
+            self._status_lbl.configure(
+                text="✅  Boost complete — launch Valorant now!",
+                text_color=GREEN
+            )
+            _win_toast("Valo Optimise", "Boost complete! Launch Valorant now.")
 
-        def _done(steps):
-            for name, ok, msg in steps:
-                log_to_box(self.log, f"{name}: {msg}", ok)
-            self._boost_btn.configure(state="normal", text="🚀  LAUNCH BOOST")
-            log_to_box(self.log, "✔ Boost complete! Launch Valorant now.", True)
-
-        run_in_thread(_do, lambda r: self.after(0, lambda: _done(r)))
+        run_in_thread(_do, lambda r: self.after(0, lambda: _complete(r)))
 
     def _revert_all(self):
-        log_to_box(self.log, "Reverting boost settings...", True)
+        self._status_lbl.configure(text="Reverting...", text_color=MUTED)
 
         def _do():
-            results = []
-            results.append(("Core Parking", self._cpu.enable_core_parking()))
-            results.append(("Timer", self._cpu.restore_timer_resolution()))
-            return results
+            r1 = self._cpu.enable_core_parking()
+            r2 = self._cpu.restore_timer_resolution()
+            return r1, r2
 
-        def _done(results):
-            for name, r in results:
-                log_to_box(self.log, f"{name}: {r[1]}", r[0])
+        def _done(res):
+            r1, r2 = res
+            errors = [m for ok, m in (r1, r2) if not ok]
+            self._status_lbl.configure(
+                text="↩ Core parking & timer restored." if not errors else " | ".join(errors),
+                text_color=GREEN if not errors else RED_LIGHT
+            )
 
         run_in_thread(_do, lambda r: self.after(0, lambda: _done(r)))
 
@@ -1196,9 +1782,34 @@ class ValorantFrame(ctk.CTkFrame):
                      text_color="#ffcc44", font=("Arial", 10), wraplength=700, anchor="w"
                      ).grid(row=0, column=0, padx=14, pady=8, sticky="w")
 
-        make_section_label(self, "Status Log").grid(row=6, column=0, sticky="w", padx=20, pady=(6, 2))
+        # ── Crosshair Backup / Restore ──
+        cf = ctk.CTkFrame(self, fg_color=PANEL, corner_radius=10)
+        cf.grid(row=6, column=0, sticky="ew", padx=20, pady=6)
+        cf.grid_columnconfigure(1, weight=1)
+        make_section_label(cf, "🎯  Crosshair Backup").grid(row=0, column=0, columnspan=3, sticky="w", padx=14, pady=(10, 4))
+
+        ctk.CTkLabel(cf, text="Current crosshair code:", text_color=MUTED, font=("Arial", 11)
+                     ).grid(row=1, column=0, padx=14, pady=(0, 4), sticky="w")
+        self._xhair_current = ctk.CTkLabel(cf, text="Loading...", text_color=TEXT,
+                                            font=("Consolas", 10), anchor="w", wraplength=500)
+        self._xhair_current.grid(row=1, column=1, sticky="ew", padx=(0, 8), pady=(0, 4))
+        accent_button(cf, "Copy to Clipboard", self._copy_crosshair, width=150).grid(
+            row=1, column=2, padx=(0, 14), pady=(0, 4))
+
+        ctk.CTkLabel(cf, text="Apply crosshair code:", text_color=MUTED, font=("Arial", 11)
+                     ).grid(row=2, column=0, padx=14, pady=(0, 10), sticky="w")
+        self._xhair_entry = ctk.CTkEntry(cf, placeholder_text="Paste crosshair code here...",
+                                          fg_color=PANEL2, border_color=PANEL2, text_color=TEXT,
+                                          font=("Consolas", 10))
+        self._xhair_entry.grid(row=2, column=1, sticky="ew", padx=(0, 8), pady=(0, 10))
+        accent_button(cf, "Apply Crosshair", self._apply_crosshair, width=150).grid(
+            row=2, column=2, padx=(0, 14), pady=(0, 10))
+
+        self._refresh_crosshair()
+
+        make_section_label(self, "Status Log").grid(row=7, column=0, sticky="w", padx=20, pady=(6, 2))
         self.log = make_status_box(self, height=100)
-        self.log.grid(row=7, column=0, sticky="ew", padx=20, pady=(0, 16))
+        self.log.grid(row=8, column=0, sticky="ew", padx=20, pady=(0, 16))
 
     def _refresh_settings(self):
         for w in self.settings_scroll.winfo_children():
@@ -1250,6 +1861,41 @@ class ValorantFrame(ctk.CTkFrame):
         def _done(r):
             log_to_box(self.log, r[1], r[0])
             self._refresh_fs_opt()
+        run_in_thread(_do, lambda r: self.after(0, lambda: _done(r)))
+
+    # ── Crosshair Backup / Restore ────────────────────────────────────────────
+
+    def _refresh_crosshair(self):
+        def _do(): return self.vc.get_crosshair_code()
+        def _done(code):
+            if code:
+                display = code if len(code) <= 80 else code[:77] + "..."
+                self._xhair_current.configure(text=display, text_color=TEXT)
+            else:
+                self._xhair_current.configure(text="Not found — launch Valorant once to generate config.", text_color=MUTED)
+        run_in_thread(_do, lambda r: self.after(0, lambda: _done(r)))
+
+    def _copy_crosshair(self):
+        def _do(): return self.vc.get_crosshair_code()
+        def _done(code):
+            if code:
+                self.clipboard_clear()
+                self.clipboard_append(code)
+                log_to_box(self.log, "Crosshair code copied to clipboard.", True)
+            else:
+                log_to_box(self.log, "No crosshair code found in config.", False)
+        run_in_thread(_do, lambda r: self.after(0, lambda: _done(r)))
+
+    def _apply_crosshair(self):
+        code = self._xhair_entry.get().strip()
+        if not code:
+            log_to_box(self.log, "Please paste a crosshair code in the input field.", False)
+            return
+        log_to_box(self.log, "Applying crosshair code...", True)
+        def _do(): return self.vc.set_crosshair_code(code)
+        def _done(r):
+            log_to_box(self.log, r[1], r[0])
+            self._refresh_crosshair()
         run_in_thread(_do, lambda r: self.after(0, lambda: _done(r)))
 
 
@@ -2471,7 +3117,17 @@ class GpuFrame(ctk.CTkFrame):
 # ══════════════════════════════════════════════════════════════════════════════
 
 class DashboardFrame(ctk.CTkFrame):
-    """Landing page: system score, quick status grid, and one-click boost."""
+    """Landing page — live system stats, animated one-click boost, settings export."""
+
+    # Boost steps shown in the inline checklist
+    _STEPS = [
+        ("pwr",   "⚡", "Ultimate Power Plan",  "Sets CPU to maximum performance mode"),
+        ("bg",    "🧹", "Kill Background Apps", "Frees CPU & RAM from non-essential processes"),
+        ("ram",   "🧠", "Clear Standby RAM",    "Flushes cached memory back to available pool"),
+        ("reg",   "🔧", "Registry Tweaks",      "Applies MMCSS & TCP performance tweaks"),
+        ("park",  "⏱", "Disable Core Parking", "Prevents CPU cores sleeping mid-fight"),
+        ("timer", "⏲", "1ms Timer Resolution",  "Reduces input & frame timing from 15.6ms → 1ms"),
+    ]
 
     _CATEGORIES = [
         ("system",     "⚡",  "System"),
@@ -2486,18 +3142,32 @@ class DashboardFrame(ctk.CTkFrame):
 
     def __init__(self, parent, cfg):
         super().__init__(parent, fg_color=BG)
-        self.cfg         = cfg
-        self._app        = None   # set by App after build
-        self._boost_ran  = False
+        self.cfg              = cfg
+        self._app             = None   # set by App after build
+        self._boost_running   = False
+        self._tick_id         = None
+        self._step_icon_lbls: dict = {}
+        self._step_msg_lbls:  dict = {}
+        self._step_row_frames: dict = {}
+        self._step_row_bgs:   dict = {}
+        # Prime psutil so first non-blocking call returns a valid sample
+        try:
+            _psutil.cpu_percent(interval=None)
+        except Exception:
+            pass
         self._build()
 
     def set_app(self, app):
         self._app = app
+        self.after(300, self._intro_animate)   # count-up stats on first render
+        self.after(800, self._tick_stats)      # then start live ticker
+
+    # ── Build ─────────────────────────────────────────────────────────────────
 
     def _build(self):
         self.grid_columnconfigure(0, weight=1)
 
-        # ── Hero Section ──
+        # ── Hero banner ──
         hero = ctk.CTkFrame(self, fg_color=PANEL3, corner_radius=14)
         hero.grid(row=0, column=0, sticky="ew", padx=20, pady=(16, 8))
         hero.grid_columnconfigure(0, weight=1)
@@ -2516,26 +3186,25 @@ class DashboardFrame(ctk.CTkFrame):
                      font=("Arial", 12), text_color=MUTED, wraplength=700, justify="left"
                      ).grid(row=2, column=0, sticky="w", pady=(6, 0))
 
-        # Score bar
-        score_frame = ctk.CTkFrame(inner_hero, fg_color="transparent")
-        score_frame.grid(row=3, column=0, sticky="ew", pady=(14, 0))
-        score_frame.grid_columnconfigure(1, weight=1)
-        ctk.CTkLabel(score_frame, text="SYSTEM SCORE", font=("Arial", 10, "bold"),
-                     text_color=MUTED).grid(row=0, column=0, sticky="w")
-        self._score_label = ctk.CTkLabel(score_frame, text="— / 8",
-                                          font=("Arial", 22, "bold"), text_color=GOLD)
-        self._score_label.grid(row=0, column=1, sticky="w", padx=(12, 0))
-        self._score_bar = ctk.CTkProgressBar(score_frame, width=260, height=10,
-                                              progress_color=ACCENT, fg_color=PANEL2, corner_radius=5)
-        self._score_bar.grid(row=0, column=2, padx=(16, 0), sticky="w")
-        self._score_bar.set(0)
-        self._score_note = ctk.CTkLabel(score_frame, text="",
-                                         font=("Arial", 10), text_color=MUTED)
-        self._score_note.grid(row=1, column=0, columnspan=3, sticky="w", pady=(4, 0))
+        # ── Live stats bar ──
+        stats_bar = ctk.CTkFrame(inner_hero, fg_color=PANEL2, corner_radius=8)
+        stats_bar.grid(row=3, column=0, sticky="ew", pady=(14, 0))
+        stats_bar.grid_columnconfigure((0, 1, 2), weight=1)
 
-        # ── Quick Status Grid ──
+        def _stat_cell(parent, col, heading):
+            ctk.CTkLabel(parent, text=heading, font=("Arial", 9, "bold"),
+                         text_color=MUTED).grid(row=0, column=col, padx=18, pady=(8, 2), sticky="n")
+            val_lbl = ctk.CTkLabel(parent, text="—", font=("Arial", 20, "bold"), text_color=ACCENT2)
+            val_lbl.grid(row=1, column=col, padx=18, pady=(0, 8), sticky="n")
+            return val_lbl
+
+        self._lbl_cpu  = _stat_cell(stats_bar, 0, "CPU USAGE")
+        self._lbl_ram  = _stat_cell(stats_bar, 1, "FREE RAM")
+        self._lbl_proc = _stat_cell(stats_bar, 2, "PROCESSES")
+
+        # ── Quick status grid ──
         ctk.CTkLabel(self, text="OPTIMISATION OVERVIEW", font=("Arial", 11, "bold"),
-                     text_color=MUTED).grid(row=1, column=0, sticky="w", padx=24, pady=(8, 4))
+                     text_color=MUTED).grid(row=1, column=0, sticky="w", padx=24, pady=(10, 4))
         grid_outer = ctk.CTkFrame(self, fg_color="transparent")
         grid_outer.grid(row=2, column=0, sticky="ew", padx=20, pady=(0, 8))
         grid_outer.grid_columnconfigure((0, 1), weight=1)
@@ -2545,11 +3214,11 @@ class DashboardFrame(ctk.CTkFrame):
             row_i = i // 2
             col_i = i % 2
             card = ctk.CTkFrame(grid_outer, fg_color=PANEL, corner_radius=12)
-            card.grid(row=row_i, column=col_i, padx=(0 if col_i else 0, 6 if col_i == 0 else 0),
+            card.grid(row=row_i, column=col_i,
+                      padx=(0, 6) if col_i == 0 else (6, 0),
                       pady=4, sticky="ew", ipadx=4)
-            # Small top accent strip
             ctk.CTkFrame(card, fg_color=PANEL2, height=2, corner_radius=0).grid(
-                row=0, column=0, columnspan=3, sticky="ew")
+                row=0, column=0, columnspan=4, sticky="ew")
             card.grid_columnconfigure(1, weight=1)
             ctk.CTkLabel(card, text=icon, font=("Arial", 20)).grid(row=1, column=0, padx=(12, 8), pady=(8, 8))
             ctk.CTkLabel(card, text=label, font=("Arial", 12, "bold"),
@@ -2557,11 +3226,10 @@ class DashboardFrame(ctk.CTkFrame):
             dot_lbl = ctk.CTkLabel(card, text="●", font=("Arial", 14, "bold"), text_color=MUTED)
             dot_lbl.grid(row=1, column=2, padx=(4, 4))
             self._status_dots[key] = dot_lbl
-            nav_key = key
-            ghost_button(card, "Configure →", lambda k=nav_key: self._navigate(k), width=120).grid(
+            ghost_button(card, "Configure →", lambda k=key: self._navigate(k), width=120).grid(
                 row=1, column=3, padx=(0, 10), pady=(8, 8))
 
-        # ── One-Click Boost ──
+        # ── One-Click Boost card with animated checklist ──
         boost_card = ctk.CTkFrame(self, fg_color=PANEL3, corner_radius=14)
         boost_card.grid(row=3, column=0, sticky="ew", padx=20, pady=(4, 8))
         boost_card.grid_columnconfigure(0, weight=1)
@@ -2577,65 +3245,573 @@ class DashboardFrame(ctk.CTkFrame):
                      font=("Arial", 18, "bold"), text_color=TEXT).grid(row=1, column=0, sticky="w", pady=(2, 0))
         ctk.CTkLabel(boost_inner,
                      text="Applies all optimisations in ~10 seconds. Recommended before EVERY session.",
-                     font=("Arial", 11), text_color=MUTED).grid(row=2, column=0, sticky="w", pady=(4, 10))
+                     font=("Arial", 11), text_color=MUTED).grid(row=2, column=0, sticky="w", pady=(4, 8))
 
+        # Button row
+        btn_row = ctk.CTkFrame(boost_inner, fg_color="transparent")
+        btn_row.grid(row=3, column=0, sticky="w")
         self._boost_btn = ctk.CTkButton(
-            boost_inner, text="🚀  ONE-CLICK BOOST", command=self._run_boost,
-            width=300, height=60, font=("Arial", 18, "bold"),
-            fg_color=ACCENT, hover_color=ACCENT_HV, corner_radius=12, text_color=TEXT
+            btn_row, text="🚀  ONE-CLICK BOOST", command=self._run_boost,
+            width=260, height=54, font=("Arial", 16, "bold"),
+            fg_color=ACCENT, hover_color=ACCENT_HV, corner_radius=10, text_color=TEXT
         )
-        self._boost_btn.grid(row=3, column=0, sticky="w", pady=(0, 4))
-        self._boost_note = ctk.CTkLabel(boost_inner, text="",
-                                         font=("Arial", 10), text_color=MUTED)
-        self._boost_note.grid(row=4, column=0, sticky="w")
+        self._boost_btn.grid(row=0, column=0, padx=(0, 12))
+        # Gentle idle pulse — draws the eye to the primary action
+        self._boost_pulse = Pulse(self._boost_btn, ACCENT, ACCENT_HV, half_period_ms=1600)
+        ctk.CTkLabel(btn_row, text="Also: Ctrl+Shift+B", font=("Arial", 9),
+                     text_color=MUTED).grid(row=1, column=0, sticky="w", pady=(4, 0))
 
-        # Log
-        make_section_label(self, "Boost Log").grid(row=4, column=0, sticky="w", padx=20, pady=(6, 2))
-        self.log = make_status_box(self, height=100)
-        self.log.grid(row=5, column=0, sticky="ew", padx=20, pady=(0, 16))
+        # Progress bar
+        self._progress = ctk.CTkProgressBar(boost_inner, height=7, progress_color=GREEN,
+                                             fg_color=PANEL2, corner_radius=4)
+        self._progress.set(0)
+        self._progress.grid(row=4, column=0, sticky="ew", pady=(10, 8))
+
+        # Animated step checklist
+        steps_frame = ctk.CTkFrame(boost_inner, fg_color=PANEL2, corner_radius=8)
+        steps_frame.grid(row=5, column=0, sticky="ew")
+        steps_frame.grid_columnconfigure(2, weight=1)
+
+        for i, (key, emoji, label, hint) in enumerate(self._STEPS):
+            row_bg = PANEL2 if i % 2 == 0 else "#16243a"
+            rf = ctk.CTkFrame(steps_frame, fg_color=row_bg, corner_radius=0)
+            rf.grid(row=i, column=0, columnspan=4, sticky="ew")
+            rf.grid_columnconfigure(2, weight=1)
+            self._step_row_frames[key] = rf
+            self._step_row_bgs[key]    = row_bg
+
+            ctk.CTkLabel(rf, text=emoji, font=("Arial", 12), width=24,
+                         text_color=MUTED).grid(row=0, column=0, padx=(10, 4), pady=6)
+
+            icon_lbl = ctk.CTkLabel(rf, text="○", font=("Arial", 11, "bold"),
+                                     text_color=MUTED, width=16)
+            icon_lbl.grid(row=0, column=1, padx=(0, 8), pady=6)
+            self._step_icon_lbls[key] = icon_lbl
+
+            ctk.CTkLabel(rf, text=label, font=("Arial", 11, "bold"),
+                         text_color=TEXT, anchor="w").grid(row=0, column=2, sticky="ew", pady=6)
+
+            msg_lbl = ctk.CTkLabel(rf, text=hint, font=("Consolas", 9),
+                                    text_color=MUTED, anchor="e", width=250)
+            msg_lbl.grid(row=0, column=3, padx=(0, 12), pady=6, sticky="e")
+            self._step_msg_lbls[key] = msg_lbl
+
+        # Status line below checklist
+        self._boost_note = ctk.CTkLabel(boost_inner, text="", font=("Arial", 11), text_color=MUTED)
+        self._boost_note.grid(row=6, column=0, sticky="w", pady=(8, 0))
+
+        # ── Settings Export / Import ──
+        export_card = ctk.CTkFrame(self, fg_color=PANEL, corner_radius=10)
+        export_card.grid(row=4, column=0, sticky="ew", padx=20, pady=(4, 8))
+        export_card.grid_columnconfigure(0, weight=1)
+        make_section_label(export_card, "💾  Settings Export / Import").grid(
+            row=0, column=0, columnspan=4, sticky="w", padx=14, pady=(10, 4))
+        ctk.CTkLabel(export_card,
+                     text="Export your current config to share with friends, or import a saved config file.",
+                     text_color=MUTED, font=("Arial", 10), wraplength=700, anchor="w"
+                     ).grid(row=1, column=0, columnspan=4, sticky="w", padx=14)
+        exp_btn_row = ctk.CTkFrame(export_card, fg_color="transparent")
+        exp_btn_row.grid(row=2, column=0, sticky="w", padx=14, pady=(8, 4))
+        accent_button(exp_btn_row, "Export Settings", self._export_settings, width=150).grid(row=0, column=0, padx=(0, 8))
+        ghost_button(exp_btn_row, "Import Settings", self._import_settings, width=150).grid(row=0, column=1)
+        self._export_status = ctk.CTkLabel(export_card, text="", font=("Arial", 10), text_color=MUTED)
+        self._export_status.grid(row=3, column=0, sticky="w", padx=14, pady=(0, 10))
+
+        # Trust strip
+        trust = ctk.CTkFrame(self, fg_color="transparent")
+        trust.grid(row=5, column=0, sticky="ew", padx=20, pady=(0, 14))
+        ctk.CTkLabel(trust,
+                     text="✓ Vanguard Safe   ✓ No data collected   ✓ All changes are fully reversible",
+                     font=("Arial", 9), text_color=MUTED, anchor="center"
+                     ).pack()
+
+    # ── Navigation ────────────────────────────────────────────────────────────
 
     def _navigate(self, key: str):
         if self._app:
             self._app._show_frame(key)
 
+    # ── Intro animation ───────────────────────────────────────────────────────
+
+    def _intro_animate(self):
+        """Count-up the live stats labels on first display for visual impact."""
+        try:
+            cpu     = _psutil.cpu_percent(interval=None)
+            mem     = _psutil.virtual_memory()
+            free_gb = mem.available / (1024 ** 3)
+            procs   = float(len(_psutil.pids()))
+            count_up(self._lbl_cpu,  cpu,     700, "{:.0f}%")
+            count_up(self._lbl_ram,  free_gb, 700, "{:.1f} GB")
+            count_up(self._lbl_proc, procs,   700, "{:.0f}")
+        except Exception:
+            pass
+
+    # ── Live stats ticker ─────────────────────────────────────────────────────
+
+    def _tick_stats(self):
+        """Update CPU/RAM/process labels. Slows to 5 s when frame is not visible."""
+        try:
+            if self.winfo_exists():
+                visible = self.winfo_ismapped()
+                cpu  = _psutil.cpu_percent(interval=None)
+                mem  = _psutil.virtual_memory()
+                procs = len(_psutil.pids())
+                free_gb = mem.available / (1024 ** 3)
+                cpu_color  = RED_LIGHT if cpu > 80 else (GOLD if cpu > 50 else ACCENT2)
+                ram_color  = RED_LIGHT if free_gb < 1.0 else (GOLD if free_gb < 2.0 else ACCENT2)
+                self._lbl_cpu.configure(text=f"{cpu:.0f}%", text_color=cpu_color)
+                self._lbl_ram.configure(text=f"{free_gb:.1f} GB", text_color=ram_color)
+                self._lbl_proc.configure(text=str(procs), text_color=ACCENT2)
+                interval = 2000 if visible else 5000
+            else:
+                return
+        except Exception:
+            interval = 5000
+        self._tick_id = self.after(interval, self._tick_stats)
+
+    # ── Step animation helpers ────────────────────────────────────────────────
+
+    def _set_step_active(self, key: str):
+        lbl = self._step_icon_lbls.get(key)
+        if lbl:
+            lbl.configure(text="⟳", text_color=GOLD)
+
+    def _set_step_done(self, key: str, ok: bool, msg: str):
+        lbl = self._step_icon_lbls.get(key)
+        if lbl:
+            lbl.configure(text="✓" if ok else "✗", text_color=GREEN if ok else RED_LIGHT)
+        msg_lbl = self._step_msg_lbls.get(key)
+        if msg_lbl:
+            msg_lbl.configure(text=msg[:50], text_color=GREEN if ok else RED_LIGHT)
+        # Flash the row green/red then restore original bg
+        rf   = self._step_row_frames.get(key)
+        orig = self._step_row_bgs.get(key, PANEL2)
+        if rf:
+            flash_bg(rf, "#0d2e18" if ok else "#2e0d12", orig, 600)
+        done = sum(1 for l in self._step_icon_lbls.values() if l.cget("text") in ("✓", "✗"))
+        ease_progress(self._progress, done / len(self._STEPS), 400)
+
+    def _reset_steps(self):
+        for lbl in self._step_icon_lbls.values():
+            lbl.configure(text="○", text_color=MUTED)
+        for key, lbl in self._step_msg_lbls.items():
+            hint = next((h for k, _, _, h in self._STEPS if k == key), "")
+            lbl.configure(text=hint, text_color=MUTED)
+        self._progress.set(0)
+        self._boost_note.configure(text="")
+
+    # ── Boost sequence ────────────────────────────────────────────────────────
+
     def _run_boost(self):
-        self._boost_btn.configure(state="disabled", text="Boosting...")
-        self._boost_note.configure(text="Running optimisations...", text_color=MUTED)
-        log_to_box(self.log, "Starting One-Click Boost...", True)
+        if self._boost_running:
+            return
+        self._boost_running = True
+        # Stop idle pulse — button is now active
+        if getattr(self, '_boost_pulse', None):
+            self._boost_pulse.stop(ACCENT)
+        self._boost_btn.configure(state="disabled", text="Running...")
+        self._reset_steps()
+        self._boost_note.configure(text="Optimising your system — this takes ~10 seconds...", text_color=MUTED)
 
         _sys = SystemOptimizer()
         _rt  = RegistryTweaks()
         _cpu = CpuTimerOptimizer()
 
-        def _do():
-            steps = []
-            ok, msg = _sys.set_ultimate_performance_plan()
-            steps.append(("Power Plan", ok, msg))
-            killed = _sys.kill_all_background_targets()
-            n      = sum(1 for _, o, _ in killed if o) if killed else 0
-            steps.append(("Kill BG Apps", True, f"Killed {n} processes" if n else "No targets running"))
-            ok, msg = _sys.clear_standby_memory()
-            steps.append(("Clear RAM", ok, msg))
-            tw_res = _rt.apply_all_tweaks()
-            n_ok = sum(1 for _, o, _ in tw_res if o)
-            steps.append(("Registry Tweaks", True, f"{n_ok}/{len(tw_res)} applied"))
-            ok, msg = _cpu.disable_core_parking()
-            steps.append(("Core Parking Off", ok, msg))
-            ok, msg = _cpu.set_timer_resolution_1ms()
-            steps.append(("1ms Timer", ok, msg))
-            return steps
+        def _activate(k):
+            self.after(0, lambda key=k: self._set_step_active(key))
 
-        def _done(steps):
-            for name, ok, msg in steps:
-                log_to_box(self.log, f"{name}: {msg}", ok)
-            self._boost_ran = True
+        def _finish(k, ok, msg):
+            self.after(0, lambda key=k, o=ok, m=msg: self._set_step_done(key, o, m))
+
+        def _do():
+            _activate("pwr")
+            ok, msg = _sys.set_ultimate_performance_plan()
+            _finish("pwr", ok, msg)
+
+            _activate("bg")
+            killed = _sys.kill_all_background_targets()
+            n = sum(1 for _, o, _ in killed if o) if killed else 0
+            _finish("bg", True, f"Killed {n} processes" if n else "No targets running")
+
+            _activate("ram")
+            ok, msg = _sys.clear_standby_memory()
+            _finish("ram", ok, msg)
+
+            _activate("reg")
+            tw = _rt.apply_all_tweaks()
+            n_ok = sum(1 for _, o, _ in tw if o)
+            _finish("reg", True, f"{n_ok}/{len(tw)} tweaks applied")
+
+            _activate("park")
+            ok, msg = _cpu.disable_core_parking()
+            _finish("park", ok, msg)
+
+            _activate("timer")
+            ok, msg = _cpu.set_timer_resolution_1ms()
+            _finish("timer", ok, msg)
+
+        def _complete(_):
+            self._boost_running = False
             self._boost_btn.configure(state="normal", text="🚀  ONE-CLICK BOOST")
             self._boost_note.configure(
-                text="✅ Boost complete! FPS gains incoming — launch Valorant now.", text_color=GREEN
+                text="✅  Boost complete — launch Valorant now!", text_color=GREEN
             )
-            log_to_box(self.log, "✅ One-Click Boost complete! FPS gains incoming.", True)
+            _win_toast("Valo Optimise", "Boost complete! Launch Valorant now.")
+
+        run_in_thread(_do, lambda r: self.after(0, lambda: _complete(r)))
+
+    # ── Settings Export / Import ──────────────────────────────────────────────
+
+    def _export_settings(self):
+        path = filedialog.asksaveasfilename(
+            title="Export Valo Optimise Settings",
+            defaultextension=".json",
+            filetypes=[("JSON files", "*.json"), ("All files", "*.*")],
+            initialfile="valo_optimise_settings.json",
+        )
+        if not path:
+            return
+        try:
+            export_data = {
+                "valo_optimise_export": True,
+                "version": "1.0",
+                "exported_at": datetime.datetime.now().isoformat(),
+                "config": self.cfg,
+            }
+            with open(path, "w", encoding="utf-8") as f:
+                json.dump(export_data, f, indent=2)
+            self._export_status.configure(text=f"✓ Exported to {os.path.basename(path)}", text_color=GREEN)
+            _win_toast("Valo Optimise", "Settings exported successfully.")
+        except Exception as e:
+            self._export_status.configure(text=f"Export failed: {e}", text_color=RED_LIGHT)
+
+    def _import_settings(self):
+        path = filedialog.askopenfilename(
+            title="Import Valo Optimise Settings",
+            filetypes=[("JSON files", "*.json"), ("All files", "*.*")],
+        )
+        if not path:
+            return
+        try:
+            with open(path, "r", encoding="utf-8") as f:
+                data = json.load(f)
+            if not data.get("valo_optimise_export"):
+                self._export_status.configure(text="Not a valid Valo Optimise settings file.", text_color=RED_LIGHT)
+                return
+            self.cfg.update(data.get("config", {}))
+            save_config(self.cfg)
+            self._export_status.configure(text=f"✓ Imported from {os.path.basename(path)}", text_color=GREEN)
+            _win_toast("Valo Optimise", "Settings imported — restart to apply all changes.")
+        except Exception as e:
+            self._export_status.configure(text=f"Import failed: {e}", text_color=RED_LIGHT)
+
+
+# ══════════════════════════════════════════════════════════════════════════════
+# AI AGENTS (PAPERCLIP)
+# ══════════════════════════════════════════════════════════════════════════════
+
+class PaperclipFrame(ctk.CTkFrame):
+    """Paperclip AI agent platform — install, start, and configure."""
+
+    def __init__(self, parent, cfg):
+        super().__init__(parent, fg_color=BG)
+        self.cfg = cfg
+        self._pm = PaperclipManager()
+        self._pulse: Pulse | None = None
+        self._build()
+
+    # ── Build UI ──────────────────────────────────────────────────────────────
+
+    def _build(self):
+        self.grid_columnconfigure(0, weight=1)
+        self.grid_rowconfigure(5, weight=1)
+
+        # Header
+        hdr = ctk.CTkFrame(self, fg_color=PANEL, corner_radius=12)
+        hdr.grid(row=0, column=0, sticky="ew", padx=24, pady=(24, 8))
+        hdr.grid_columnconfigure(1, weight=1)
+        ctk.CTkLabel(hdr, text="🤖", font=("Arial", 26)).grid(
+            row=0, column=0, padx=(18, 10), pady=16)
+        ctk.CTkLabel(hdr, text="AI Agents — Paperclip", font=("Arial", 18, "bold"),
+                     text_color=TEXT, anchor="w").grid(row=0, column=1, sticky="w")
+        ctk.CTkLabel(hdr, text="Build and run free AI agents via Paperclip + OpenClaw AI",
+                     font=("Arial", 11), text_color=MUTED, anchor="w"
+                     ).grid(row=1, column=1, sticky="w", pady=(0, 14), padx=(0, 18))
+
+        # ── Prerequisites ─────────────────────────────────────────────────────
+        pre_card = ctk.CTkFrame(self, fg_color=PANEL, corner_radius=12)
+        pre_card.grid(row=1, column=0, sticky="ew", padx=24, pady=6)
+        pre_card.grid_columnconfigure(0, weight=1)
+
+        ph = ctk.CTkFrame(pre_card, fg_color="transparent")
+        ph.grid(row=0, column=0, sticky="ew", padx=18, pady=(14, 6))
+        make_section_label(ph, "Prerequisites").pack(side="left")
+        ctk.CTkButton(ph, text="Check", width=70, height=26,
+                      fg_color=PANEL2, hover_color=ACCENT, text_color=TEXT,
+                      font=("Arial", 11), corner_radius=6,
+                      command=self._check_prereqs).pack(side="right")
+
+        self._prereq_frame = ctk.CTkFrame(pre_card, fg_color="transparent")
+        self._prereq_frame.grid(row=1, column=0, sticky="ew", padx=18, pady=(0, 14))
+
+        # ── Server Control ────────────────────────────────────────────────────
+        srv_card = ctk.CTkFrame(self, fg_color=PANEL, corner_radius=12)
+        srv_card.grid(row=2, column=0, sticky="ew", padx=24, pady=6)
+        srv_card.grid_columnconfigure(0, weight=1)
+
+        sh = ctk.CTkFrame(srv_card, fg_color="transparent")
+        sh.grid(row=0, column=0, sticky="ew", padx=18, pady=(14, 8))
+        make_section_label(sh, "Paperclip Server").pack(side="left")
+
+        self._status_lbl = ctk.CTkLabel(sh, text="● Checking…",
+                                         font=("Arial", 11), text_color=MUTED)
+        self._status_lbl.pack(side="right")
+
+        btn_row = ctk.CTkFrame(srv_card, fg_color="transparent")
+        btn_row.grid(row=1, column=0, sticky="ew", padx=18, pady=(0, 6))
+
+        self._start_btn = ctk.CTkButton(
+            btn_row, text="🚀  Install & Start",
+            fg_color=ACCENT, hover_color=ACCENT_HV, text_color=TEXT,
+            font=("Arial", 12, "bold"), corner_radius=8, height=36,
+            command=self._install_and_start)
+        self._start_btn.pack(side="left", padx=(0, 8))
+
+        self._stop_btn = ghost_button(btn_row, "⏹  Stop", self._stop_server)
+        self._stop_btn.pack(side="left", padx=(0, 8))
+        self._stop_btn.configure(state="disabled")
+
+        ghost_button(btn_row, "⟳  Update", self._update).pack(side="left")
+
+        # Access URL display
+        url_row = ctk.CTkFrame(srv_card, fg_color=PANEL2, corner_radius=8)
+        url_row.grid(row=2, column=0, sticky="ew", padx=18, pady=(4, 6))
+        url_row.grid_columnconfigure(1, weight=1)
+
+        ctk.CTkLabel(url_row, text="Harvey (you):", font=("Arial", 10),
+                     text_color=MUTED).grid(row=0, column=0, padx=(12, 6), pady=(8, 2), sticky="w")
+        self._harvey_lbl = ctk.CTkLabel(url_row, text="http://localhost:3100",
+                                         font=("Arial", 10, "bold"), text_color=ACCENT2, anchor="w")
+        self._harvey_lbl.grid(row=0, column=1, sticky="w", pady=(8, 2))
+        ctk.CTkButton(url_row, text="Open ↗", width=60, height=22,
+                      fg_color="transparent", hover_color=PANEL, text_color=ACCENT2,
+                      font=("Arial", 10), corner_radius=4,
+                      command=lambda: self._open_url(self._pm.get_harvey_url())
+                      ).grid(row=0, column=2, padx=(4, 10), pady=(8, 2))
+
+        ctk.CTkLabel(url_row, text="Tobias:", font=("Arial", 10),
+                     text_color=MUTED).grid(row=1, column=0, padx=(12, 6), pady=(2, 8), sticky="w")
+        self._tobias_lbl = ctk.CTkLabel(url_row, text="Detecting…",
+                                         font=("Arial", 10, "bold"), text_color=ACCENT2, anchor="w")
+        self._tobias_lbl.grid(row=1, column=1, sticky="w", pady=(2, 8))
+        ctk.CTkButton(url_row, text="Copy", width=60, height=22,
+                      fg_color="transparent", hover_color=PANEL, text_color=MUTED,
+                      font=("Arial", 10), corner_radius=4,
+                      command=self._copy_tobias_url
+                      ).grid(row=1, column=2, padx=(4, 10), pady=(2, 8))
+
+        # ── AI Backend ────────────────────────────────────────────────────────
+        ai_card = ctk.CTkFrame(self, fg_color=PANEL, corner_radius=12)
+        ai_card.grid(row=3, column=0, sticky="ew", padx=24, pady=6)
+        ai_card.grid_columnconfigure(1, weight=1)
+
+        make_section_label(ai_card, "AI Backend — OpenClaw (Free)").grid(
+            row=0, column=0, columnspan=3, padx=18, pady=(14, 8), sticky="w")
+
+        cfg = self._pm.get_config()
+
+        ctk.CTkLabel(ai_card, text="Provider", font=("Arial", 11),
+                     text_color=MUTED).grid(row=1, column=0, padx=(18, 8), pady=4, sticky="w")
+        self._provider_var = ctk.StringVar(value=cfg.get("ai_provider", "openclaw"))
+        ctk.CTkOptionMenu(ai_card, values=["openclaw", "openai", "custom"],
+                          variable=self._provider_var,
+                          fg_color=PANEL2, button_color=ACCENT,
+                          button_hover_color=ACCENT_HV, text_color=TEXT,
+                          font=("Arial", 11), width=150
+                          ).grid(row=1, column=1, padx=(0, 18), pady=4, sticky="w")
+
+        ctk.CTkLabel(ai_card, text="API URL", font=("Arial", 11),
+                     text_color=MUTED).grid(row=2, column=0, padx=(18, 8), pady=4, sticky="w")
+        self._url_entry = ctk.CTkEntry(ai_card, placeholder_text="https://api.openclaw.ai/v1",
+                                        fg_color=PANEL2, border_color=BORDER,
+                                        text_color=TEXT, font=("Arial", 11), height=30)
+        self._url_entry.grid(row=2, column=1, columnspan=2, padx=(0, 18), pady=4, sticky="ew")
+        if cfg.get("ai_api_url"):
+            self._url_entry.insert(0, cfg["ai_api_url"])
+
+        ctk.CTkLabel(ai_card, text="API Key", font=("Arial", 11),
+                     text_color=MUTED).grid(row=3, column=0, padx=(18, 8), pady=4, sticky="w")
+        self._key_entry = ctk.CTkEntry(ai_card, placeholder_text="sk-oc-…",
+                                        show="•", fg_color=PANEL2, border_color=BORDER,
+                                        text_color=TEXT, font=("Arial", 11), height=30)
+        self._key_entry.grid(row=3, column=1, columnspan=2, padx=(0, 18), pady=4, sticky="ew")
+        if cfg.get("ai_api_key"):
+            self._key_entry.insert(0, cfg["ai_api_key"])
+
+        self._ai_status = ctk.CTkLabel(ai_card, text="", font=("Arial", 10), text_color=GREEN)
+        self._ai_status.grid(row=4, column=1, padx=(0, 18), pady=(2, 4), sticky="w")
+
+        ctk.CTkButton(ai_card, text="Save Config", width=110, height=30,
+                      fg_color=ACCENT, hover_color=ACCENT_HV, text_color=TEXT,
+                      font=("Arial", 11, "bold"), corner_radius=6,
+                      command=self._save_ai_config
+                      ).grid(row=4, column=0, padx=(18, 8), pady=(4, 14), sticky="w")
+
+        # ── Server Log ────────────────────────────────────────────────────────
+        log_card = ctk.CTkFrame(self, fg_color=PANEL, corner_radius=12)
+        log_card.grid(row=5, column=0, sticky="nsew", padx=24, pady=(6, 24))
+        log_card.grid_columnconfigure(0, weight=1)
+        log_card.grid_rowconfigure(1, weight=1)
+
+        make_section_label(log_card, "Server Log").grid(
+            row=0, column=0, padx=18, pady=(14, 6), sticky="w")
+
+        self._log = ctk.CTkTextbox(log_card, fg_color=PANEL2, text_color=MUTED,
+                                    font=("Consolas", 10), height=140,
+                                    border_color=BORDER, border_width=1)
+        self._log.grid(row=1, column=0, sticky="nsew", padx=18, pady=(0, 14))
+        self._log.configure(state="disabled")
+
+        # Initial state refresh
+        self.after(300, self._refresh_status)
+        self.after(500, self._refresh_tobias_url)
+
+    # ── Helpers ───────────────────────────────────────────────────────────────
+
+    def _log_msg(self, msg: str):
+        self._log.configure(state="normal")
+        self._log.insert("end", f"{msg}\n")
+        self._log.see("end")
+        self._log.configure(state="disabled")
+
+    def _open_url(self, url: str):
+        try:
+            import webbrowser
+            webbrowser.open(url)
+        except Exception:
+            pass
+
+    def _copy_tobias_url(self):
+        url = self._tobias_lbl.cget("text")
+        try:
+            self.clipboard_clear()
+            self.clipboard_append(url)
+            self._tobias_lbl.configure(text_color=GREEN)
+            self.after(1500, lambda: self._tobias_lbl.configure(text_color=ACCENT2))
+        except Exception:
+            pass
+
+    def _refresh_status(self):
+        if self._pm.is_running():
+            self._status_lbl.configure(text="● Running", text_color=GREEN)
+            self._start_btn.configure(state="disabled")
+            self._stop_btn.configure(state="normal")
+        elif self._pm.is_installed():
+            self._status_lbl.configure(text="● Stopped", text_color=MUTED)
+            self._start_btn.configure(text="▶  Start Server", state="normal",
+                                       fg_color=ACCENT, hover_color=ACCENT_HV)
+            self._stop_btn.configure(state="disabled")
+        else:
+            self._status_lbl.configure(text="● Not Installed", text_color=RED_LIGHT)
+            self._start_btn.configure(text="🚀  Install & Start", state="normal",
+                                       fg_color=ACCENT, hover_color=ACCENT_HV)
+            self._stop_btn.configure(state="disabled")
+
+    def _refresh_tobias_url(self):
+        url = self._pm.get_tobias_url()
+        self._tobias_lbl.configure(text=url)
+
+    # ── Prerequisites ─────────────────────────────────────────────────────────
+
+    def _check_prereqs(self):
+        for w in self._prereq_frame.winfo_children():
+            w.destroy()
+        self._prereq_frame.configure(fg_color="transparent")
+        ctk.CTkLabel(self._prereq_frame, text="Checking…", font=("Arial", 10),
+                     text_color=MUTED).pack(anchor="w")
+
+        def _do():
+            return self._pm.check_prerequisites()
+
+        def _done(results):
+            for w in self._prereq_frame.winfo_children():
+                w.destroy()
+            for r in results:
+                row = ctk.CTkFrame(self._prereq_frame, fg_color="transparent")
+                row.pack(fill="x", pady=1)
+                color = GREEN if r["ok"] else RED_LIGHT
+                mark  = "✓" if r["ok"] else "✗"
+                ctk.CTkLabel(row, text=mark, font=("Arial", 11, "bold"),
+                             text_color=color, width=18).pack(side="left")
+                ctk.CTkLabel(row, text=r["name"], font=("Arial", 11),
+                             text_color=TEXT, width=120, anchor="w").pack(side="left")
+                ctk.CTkLabel(row, text=r["detail"], font=("Arial", 10),
+                             text_color=MUTED, anchor="w").pack(side="left", padx=(6, 0))
 
         run_in_thread(_do, lambda r: self.after(0, lambda: _done(r)))
+
+    # ── Install & Start ───────────────────────────────────────────────────────
+
+    def _install_and_start(self):
+        self._start_btn.configure(state="disabled", text="Working…")
+        self._status_lbl.configure(text="● Installing…", text_color=GOLD)
+        self._log_msg("Starting Paperclip setup…")
+
+        def _do():
+            ok, msg = self._pm.install(log_cb=lambda m: self.after(0, lambda m=m: self._log_msg(m)))
+            return ok, msg
+
+        def _done(result):
+            ok, msg = result
+            self._log_msg(msg)
+            if ok:
+                self._log_msg("Launching server…")
+                self._status_lbl.configure(text="● Starting…", text_color=GOLD)
+                ok2, msg2 = self._pm.start_server(
+                    log_cb=lambda m: self.after(0, lambda m=m: self._log_msg(m)))
+                self._log_msg(msg2)
+                self.after(2000, self._refresh_status)
+            else:
+                self._status_lbl.configure(text="● Error", text_color=RED_LIGHT)
+                self._start_btn.configure(state="normal", text="🚀  Install & Start")
+
+        run_in_thread(_do, lambda r: self.after(0, lambda: _done(r)))
+
+    # ── Stop ──────────────────────────────────────────────────────────────────
+
+    def _stop_server(self):
+        self._pm.stop_server()
+        self._log_msg("Server stopped.")
+        self._refresh_status()
+
+    # ── Update ────────────────────────────────────────────────────────────────
+
+    def _update(self):
+        self._log_msg("Updating Paperclip…")
+
+        def _do():
+            return self._pm.update(log_cb=lambda m: self.after(0, lambda m=m: self._log_msg(m)))
+
+        def _done(result):
+            ok, msg = result
+            self._log_msg(msg)
+            self._refresh_status()
+
+        run_in_thread(_do, lambda r: self.after(0, lambda: _done(r)))
+
+    # ── AI Config ─────────────────────────────────────────────────────────────
+
+    def _save_ai_config(self):
+        ok = self._pm.save_config(
+            ai_provider=self._provider_var.get(),
+            ai_api_url=self._url_entry.get().strip(),
+            ai_api_key=self._key_entry.get().strip(),
+        )
+        if ok:
+            self._ai_status.configure(text="✓ Saved", text_color=GREEN)
+            self.after(2000, lambda: self._ai_status.configure(text=""))
+        else:
+            self._ai_status.configure(text="Save failed", text_color=RED_LIGHT)
 
 
 # ══════════════════════════════════════════════════════════════════════════════
@@ -2653,37 +3829,56 @@ class App(ctk.CTk):
         self._frames: dict = {}
         self._active_key = None
         self._build()
+        fade_in_window(self, duration_ms=280)   # smooth entrance
+        self.protocol("WM_DELETE_WINDOW", self._on_close)
+        self._hotkey_registered = False
+        try:
+            import keyboard as _kb
+            _kb.add_hotkey('ctrl+shift+b', self._hotkey_boost)
+            self._hotkey_registered = True
+        except Exception:
+            pass
+        if not self.cfg.get("onboarding_done"):
+            self.after(500, self._show_onboarding)
 
     def _build(self):
         self.grid_columnconfigure(1, weight=1)
         self.grid_rowconfigure(0, weight=1)
 
-        # Sidebar — slightly darker, 210px wide
-        sidebar = ctk.CTkFrame(self, fg_color="#080d18", corner_radius=0, width=210)
+        # ── Sidebar ───────────────────────────────────────────────────────────
+        sidebar = ctk.CTkFrame(self, fg_color=SIDEBAR_BG, corner_radius=0, width=224)
         sidebar.grid(row=0, column=0, sticky="nsew")
         sidebar.grid_propagate(False)
-        # 17 nav rows (row 0=logo, row 1=sep, rows 2-17=nav buttons) + weight row 18
-        sidebar.grid_rowconfigure(18, weight=1)
+        sidebar.grid_columnconfigure(0, minsize=4)   # indicator strip column
+        sidebar.grid_columnconfigure(1, weight=1)    # button column
+        sidebar.grid_rowconfigure(26, weight=1)      # push bottom frame down
 
-        # Logo
-        logo_frame = ctk.CTkFrame(sidebar, fg_color="transparent")
-        logo_frame.grid(row=0, column=0, pady=(24, 8), padx=16, sticky="w")
-        ctk.CTkLabel(logo_frame, text="VALO", font=("Arial", 22, "bold"),
-                     text_color=ACCENT).grid(row=0, column=0, sticky="w")
-        ctk.CTkLabel(logo_frame, text="OPTIMISE", font=("Arial", 12, "bold"),
-                     text_color=TEXT).grid(row=1, column=0, sticky="w")
+        # ── Logo ──
+        logo_wrap = ctk.CTkFrame(sidebar, fg_color="transparent")
+        logo_wrap.grid(row=0, column=0, columnspan=2, pady=(20, 6), padx=14, sticky="w")
+        ctk.CTkLabel(logo_wrap, text="VALO", font=("Arial", 20, "bold"),
+                     text_color=ACCENT).pack(side="left", padx=(0, 3))
+        ctk.CTkLabel(logo_wrap, text="OPTIMISE", font=("Arial", 14, "bold"),
+                     text_color=TEXT).pack(side="left")
+        ctk.CTkLabel(logo_wrap, text=" PRO", font=("Arial", 8, "bold"),
+                     text_color=GOLD).pack(side="left", anchor="s", pady=(0, 2))
 
-        ctk.CTkFrame(sidebar, fg_color=PANEL2, height=1).grid(
-            row=1, column=0, sticky="ew", padx=12, pady=(0, 8))
+        ctk.CTkFrame(sidebar, fg_color=BORDER, height=1).grid(
+            row=1, column=0, columnspan=2, sticky="ew", padx=10, pady=(0, 4))
 
-        # Nav buttons — dashboard first, then mousedriver added after mouse
-        nav_items = [
+        # ── Nav with group labels ──
+        _NAV = [
+            (None,           "MAIN"),
             ("dashboard",    "🏠  Dashboard"),
+            (None,           "BOOST"),
+            ("boost",        "🚀  Pre-Game Boost"),
+            ("benchmark",    "📈  Performance Report"),
+            (None,           "OPTIMISE"),
             ("system",       "⚡  System"),
             ("network",      "🌐  Network"),
             ("registry",     "🔧  Registry"),
-            ("boost",        "🚀  Pre-Game Boost"),
             ("valorant",     "🎮  Valorant Config"),
+            (None,           "HARDWARE"),
             ("mouse",        "🖱️  Mouse & Aim"),
             ("mousedriver",  "🎯  Mouse Driver"),
             ("visual",       "🖥️  Visual Effects"),
@@ -2691,27 +3886,68 @@ class App(ctk.CTk):
             ("cpu",          "⏱️  CPU & Timer"),
             ("gpu",          "🎮  GPU Optimizer"),
             ("visibility",   "👁️  Visibility"),
+            (None,           "BUSINESS"),
+            ("agents",       "🤖  AI Agents"),
+            (None,           "TOOLS"),
             ("startup",      "🗂️  Startup"),
             ("stats",        "📊  Stats"),
             ("guide",        "📖  Guide"),
         ]
-        self._nav_btns: dict = {}
-        for idx, (key, label) in enumerate(nav_items, start=2):
+
+        self._nav_btns:       dict = {}
+        self._nav_indicators: dict = {}
+        grid_row = 2
+
+        for key, label in _NAV:
+            if key is None:
+                # Section group label
+                ctk.CTkLabel(sidebar, text=label, font=("Arial", 9, "bold"),
+                             text_color="#3a4e66", anchor="w"
+                             ).grid(row=grid_row, column=0, columnspan=2,
+                                    padx=(14, 8), pady=(8, 1), sticky="w")
+                grid_row += 1
+                continue
+
+            # Active indicator strip (hidden until selected)
+            ind = ctk.CTkFrame(sidebar, width=3, height=22,
+                               fg_color="transparent", corner_radius=2)
+            ind.grid(row=grid_row, column=0, padx=(4, 0), pady=2, sticky="ns")
+            self._nav_indicators[key] = ind
+
             btn = ctk.CTkButton(
-                sidebar, text=label, command=lambda k=key: self._show_frame(k),
-                anchor="w", width=186, height=34,
-                fg_color="transparent", hover_color=PANEL2,
-                text_color=MUTED, font=("Arial", 12),
-                corner_radius=8
+                sidebar, text=label,
+                command=lambda k=key: self._show_frame(k),
+                anchor="w", width=198, height=30,
+                fg_color="transparent", hover_color=SIDEBAR_ACT,
+                text_color=MUTED, font=("Arial", 11),
+                corner_radius=6
             )
-            btn.grid(row=idx, column=0, padx=12, pady=2, sticky="w")
+            btn.grid(row=grid_row, column=1, padx=(2, 8), pady=2, sticky="ew")
             self._nav_btns[key] = btn
 
-        # Admin status at bottom of sidebar
-        admin_lbl = get_admin_status_label()
+            # Hover: light up when not already active
+            btn.bind("<Enter>", lambda e, b=btn, k=key: (
+                None if k == self._active_key
+                else b.configure(fg_color=SIDEBAR_ACT, text_color=TEXT)
+            ))
+            btn.bind("<Leave>", lambda e, b=btn, k=key: (
+                None if k == self._active_key
+                else b.configure(fg_color="transparent", text_color=MUTED)
+            ))
+
+            grid_row += 1
+
+        # ── Bottom: admin status + trust badges ──
+        admin_lbl   = get_admin_status_label()
         admin_color = GREEN if "Admin" in admin_lbl else ACCENT
-        ctk.CTkLabel(sidebar, text=f"● {admin_lbl}", font=("Arial", 10),
-                     text_color=admin_color).grid(row=19, column=0, padx=16, pady=16, sticky="sw")
+        bottom_frame = ctk.CTkFrame(sidebar, fg_color="transparent")
+        bottom_frame.grid(row=27, column=0, columnspan=2, padx=14, pady=(8, 14), sticky="sw")
+        ctk.CTkLabel(bottom_frame, text=f"● {admin_lbl}", font=("Arial", 9),
+                     text_color=admin_color).grid(row=0, column=0, sticky="w")
+        ctk.CTkLabel(bottom_frame, text="✓ Vanguard Safe", font=("Arial", 8),
+                     text_color=GREEN).grid(row=1, column=0, sticky="w", pady=(3, 0))
+        ctk.CTkLabel(bottom_frame, text="✓ No Data Collected", font=("Arial", 8),
+                     text_color=GREEN).grid(row=2, column=0, sticky="w")
 
         # Content area
         content = ctk.CTkFrame(self, fg_color=BG, corner_radius=0)
@@ -2727,6 +3963,7 @@ class App(ctk.CTk):
             "network":     NetworkFrame,
             "registry":    RegistryFrame,
             "boost":       BoostFrame,
+            "benchmark":   BenchmarkFrame,
             "valorant":    ValorantFrame,
             "mouse":       MouseFrame,
             "mousedriver": MouseDriverFrame,
@@ -2735,6 +3972,7 @@ class App(ctk.CTk):
             "cpu":         CpuTimerFrame,
             "gpu":         GpuFrame,
             "visibility":  VisibilityFrame,
+            "agents":      PaperclipFrame,
             "startup":     StartupFrame,
             "stats":       StatsFrame,
             "guide":       GuideFrame,
@@ -2757,25 +3995,189 @@ class App(ctk.CTk):
             ))
 
     def _show_frame(self, key: str):
+        # Deactivate previous indicator
+        if self._active_key:
+            prev_ind = self._nav_indicators.get(self._active_key)
+            prev_btn = self._nav_btns.get(self._active_key)
+            if prev_ind:
+                prev_ind.configure(fg_color="transparent")
+            if prev_btn:
+                prev_btn.configure(fg_color="transparent", text_color=MUTED,
+                                   font=("Arial", 11))
+
+        # Activate new indicator
+        self._active_key = key
+        new_ind = self._nav_indicators.get(key)
+        new_btn = self._nav_btns.get(key)
+        if new_ind:
+            new_ind.configure(fg_color=ACCENT)
+        if new_btn:
+            new_btn.configure(fg_color=SIDEBAR_ACT, text_color=TEXT,
+                               font=("Arial", 11, "bold"))
+
+        # Raise the target frame
         for k, frame in self._frames.items():
             if k == key:
                 frame.tkraise()
             else:
                 frame.lower()
 
-        # Update nav button highlight
-        for k, btn in self._nav_btns.items():
-            if k == key:
-                btn.configure(fg_color=PANEL2, text_color=TEXT)
-            else:
-                btn.configure(fg_color="transparent", text_color=MUTED)
+    # ── Global Hotkey ─────────────────────────────────────────────────────────
 
-        self._active_key = key
+    def _hotkey_boost(self):
+        boost_frame = self._frames.get("boost")
+        if boost_frame and not getattr(boost_frame, '_boost_running', False):
+            self.after(0, boost_frame._run_boost)
+            _win_toast("Valo Optimise", "Pre-Game Boost triggered (Ctrl+Shift+B)")
+
+    # ── Auto-Restore on Exit ──────────────────────────────────────────────────
+
+    def _on_close(self):
+        import tkinter.messagebox as mb
+        needs_restore = []
+        try:
+            r = subprocess.run(["sc", "query", "wuauserv"],
+                               capture_output=True, text=True,
+                               creationflags=subprocess.CREATE_NO_WINDOW)
+            if "STOPPED" in r.stdout or "DISABLED" in r.stdout:
+                needs_restore.append(("wuauserv", "Windows Update (wuauserv)"))
+        except Exception:
+            pass
+        try:
+            r = subprocess.run(["sc", "query", "DiagTrack"],
+                               capture_output=True, text=True,
+                               creationflags=subprocess.CREATE_NO_WINDOW)
+            if "STOPPED" in r.stdout or "DISABLED" in r.stdout:
+                needs_restore.append(("DiagTrack", "Diagnostic Tracking (DiagTrack)"))
+        except Exception:
+            pass
+
+        if needs_restore:
+            service_names = "\n  \u2022 ".join(label for _, label in needs_restore)
+            ans = mb.askyesno(
+                "Restore Services?",
+                f"These services are currently stopped:\n\n  \u2022 {service_names}\n\n"
+                "Re-enable them before closing?\n"
+                "(Recommended \u2014 needed for Windows Updates & system health)",
+                icon="question"
+            )
+            if ans:
+                for svc, _ in needs_restore:
+                    try:
+                        subprocess.run(["sc", "start", svc],
+                                       capture_output=True,
+                                       creationflags=subprocess.CREATE_NO_WINDOW)
+                    except Exception:
+                        pass
+        if self._hotkey_registered:
+            try:
+                import keyboard as _kb
+                _kb.remove_hotkey('ctrl+shift+b')
+            except Exception:
+                pass
+        self.destroy()
+
+    # ── First-Launch Onboarding ───────────────────────────────────────────────
+
+    def _show_onboarding(self):
+        win = ctk.CTkToplevel(self)
+        win.title("Welcome to Valo Optimise")
+        win.geometry("520x420")
+        win.resizable(False, False)
+        win.configure(fg_color=BG)
+        win.grab_set()
+        win.lift()
+        win.focus_force()
+        win.grid_columnconfigure(0, weight=1)
+
+        # Header strip
+        ctk.CTkFrame(win, fg_color=ACCENT, height=4, corner_radius=0).grid(
+            row=0, column=0, sticky="ew")
+
+        ctk.CTkLabel(win, text="Welcome to Valo Optimise",
+                     font=("Arial", 20, "bold"), text_color=TEXT
+                     ).grid(row=1, column=0, padx=30, pady=(20, 4), sticky="w")
+        ctk.CTkLabel(win,
+                     text="First launch detected. Would you like to run all safe tweaks now?",
+                     font=("Arial", 12), text_color=MUTED, wraplength=460, justify="left"
+                     ).grid(row=2, column=0, padx=30, sticky="w")
+
+        # Checklist card
+        checklist_card = ctk.CTkFrame(win, fg_color=PANEL, corner_radius=10)
+        checklist_card.grid(row=3, column=0, sticky="ew", padx=30, pady=(16, 8))
+        checklist_card.grid_columnconfigure(0, weight=1)
+        make_section_label(checklist_card, "Safe tweaks that will run:").grid(
+            row=0, column=0, sticky="w", padx=14, pady=(10, 4))
+
+        _items = [
+            ("⚡", "Ultimate Performance power plan"),
+            ("🔧", "Registry performance tweaks"),
+            ("⏱️", "Disable core parking"),
+            ("⏱️", "1ms timer resolution"),
+        ]
+        for i, (icon, desc) in enumerate(_items, start=1):
+            row_fr = ctk.CTkFrame(checklist_card, fg_color="transparent")
+            row_fr.grid(row=i, column=0, sticky="w", padx=14, pady=2)
+            ctk.CTkLabel(row_fr, text=icon, font=("Arial", 13)).grid(row=0, column=0, padx=(0, 6))
+            ctk.CTkLabel(row_fr, text=desc, font=("Arial", 11), text_color=TEXT).grid(row=0, column=1, sticky="w")
+        ctk.CTkFrame(checklist_card, height=1, fg_color=PANEL2).grid(
+            row=len(_items) + 1, column=0, sticky="ew", padx=14, pady=(6, 0))
+        ctk.CTkLabel(checklist_card,
+                     text="These are OS-level tweaks only — fully Vanguard-safe.",
+                     font=("Arial", 10), text_color=MUTED
+                     ).grid(row=len(_items) + 2, column=0, sticky="w", padx=14, pady=(4, 10))
+
+        status_lbl = ctk.CTkLabel(win, text="", font=("Arial", 11), text_color=GREEN)
+        status_lbl.grid(row=4, column=0, padx=30, sticky="w", pady=(0, 4))
+
+        btn_row = ctk.CTkFrame(win, fg_color="transparent")
+        btn_row.grid(row=5, column=0, padx=30, pady=(0, 24), sticky="w")
+
+        def _run_all():
+            run_btn.configure(state="disabled", text="Running...")
+            status_lbl.configure(text="Applying tweaks...", text_color=MUTED)
+
+            def _do():
+                results = []
+                ok, msg = SystemOptimizer().set_ultimate_performance_plan()
+                results.append(("Power Plan", ok, msg))
+                tw = RegistryTweaks().apply_all_tweaks()
+                n_ok = sum(1 for _, o, _ in tw if o)
+                results.append(("Registry Tweaks", True, f"{n_ok}/{len(tw)} applied"))
+                ok, msg = CpuTimerOptimizer().disable_core_parking()
+                results.append(("Core Parking", ok, msg))
+                ok, msg = CpuTimerOptimizer().set_timer_resolution_1ms()
+                results.append(("Timer Resolution", ok, msg))
+                return results
+
+            def _done(results):
+                n_ok = sum(1 for _, o, _ in results if o)
+                status_lbl.configure(
+                    text=f"Done! {n_ok}/{len(results)} tweaks applied. Restart Valorant for best results.",
+                    text_color=GREEN
+                )
+                run_btn.configure(state="disabled", text="Done!")
+                self.cfg["onboarding_done"] = True
+                save_config(self.cfg)
+                _win_toast("Valo Optimise", "Safe tweaks applied! Launch Valorant now.")
+                win.after(1800, win.destroy)
+
+            run_in_thread(_do, lambda r: win.after(0, lambda: _done(r)))
+
+        def _skip():
+            self.cfg["onboarding_done"] = True
+            save_config(self.cfg)
+            win.destroy()
+
+        run_btn = accent_button(btn_row, "Run All Safe Tweaks", _run_all, width=200)
+        run_btn.grid(row=0, column=0, padx=(0, 10))
+        ghost_button(btn_row, "Skip", _skip, width=100).grid(row=0, column=1)
 
 
 # ── Entry Point ───────────────────────────────────────────────────────────────
 
 if __name__ == "__main__":
+    set_dpi_awareness()   # must be before any Tk window creation
     require_admin()
     cfg = load_config()
     app = App(cfg)

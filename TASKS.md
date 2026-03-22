@@ -7,13 +7,6 @@
 
 ## 🔴 To Do
 
-- [ ] **Live Ping Monitor** — Real-time latency graph to Valorant servers (EU/NA/AP) before queuing
-- [ ] **Crosshair Backup/Restore** — Extract, save and restore crosshair from game config
-- [ ] **Auto-Restore on Exit** — Prompt to re-enable services (Windows Update, DiagTrack) when app closes
-- [ ] **Settings Export/Import** — Package all optimisation settings into a shareable file
-- [ ] **First-Launch Onboarding** — Wizard that runs all safe tweaks automatically on first open
-- [ ] **Toast Notifications** — Windows native notifications when boost completes
-- [ ] **Global Hotkey** — Ctrl+Shift+B triggers Pre-Game Boost from anywhere
 - [ ] **GitHub Projects Board** — Set up kanban on GitHub (Settings → Projects → New)
 
 ---
@@ -26,6 +19,13 @@
 
 ## 🟢 Done
 
+- [x] **Global Hotkey** — Ctrl+Shift+B triggers Pre-Game Boost from anywhere (keyboard package, graceful fallback)
+- [x] **Toast Notifications** — Windows native notification when boost completes (PowerShell WinRT toast)
+- [x] **Auto-Restore on Exit** — Prompts to re-enable Windows Update + DiagTrack on close
+- [x] **Live Ping Monitor** — Real-time ping to EU/NA/AP Valorant servers in NetworkFrame (2 s refresh, colour coded)
+- [x] **Crosshair Backup/Restore** — Read/write CrosshairProfileSettings from GameUserSettings.ini
+- [x] **Settings Export/Import** — Export config to .json and import back (Dashboard card + filedialog)
+- [x] **First-Launch Onboarding** — Modal wizard on first launch offers to run all safe tweaks automatically
 - [x] System Optimizer (power plans, RAM, background processes, CPU freq, Windows Update, DiagTrack)
 - [x] Network Optimizer (DNS, NIC power, TCP tweaks, ping test)
 - [x] Registry Tweaks
