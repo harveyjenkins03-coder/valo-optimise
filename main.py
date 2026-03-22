@@ -3583,57 +3583,70 @@ class PaperclipFrame(ctk.CTkFrame):
 
         ghost_button(btn_row, "⟳  Update", self._update).pack(side="left")
 
-        # ── Connect Together ──────────────────────────────────────────────────
+        # ── Access ────────────────────────────────────────────────────────────
         url_row = ctk.CTkFrame(srv_card, fg_color=PANEL2, corner_radius=8)
         url_row.grid(row=2, column=0, sticky="ew", padx=18, pady=(4, 14))
         url_row.grid_columnconfigure(1, weight=1)
 
         # Harvey row
         ctk.CTkLabel(url_row, text="Your link:", font=("Arial", 10),
-                     text_color=MUTED).grid(row=0, column=0, padx=(12, 6), pady=(10, 3), sticky="w")
+                     text_color=MUTED).grid(row=0, column=0, padx=(12, 6), pady=(10, 4), sticky="w")
         self._harvey_lbl = ctk.CTkLabel(url_row, text="http://localhost:3100",
                                          font=("Arial", 10, "bold"), text_color=ACCENT2, anchor="w")
-        self._harvey_lbl.grid(row=0, column=1, sticky="w", pady=(10, 3))
+        self._harvey_lbl.grid(row=0, column=1, sticky="w", pady=(10, 4))
         ctk.CTkButton(url_row, text="Open ↗", width=60, height=22,
                       fg_color="transparent", hover_color=PANEL, text_color=ACCENT2,
                       font=("Arial", 10), corner_radius=4,
                       command=lambda: self._open_url(self._pm.get_harvey_url())
-                      ).grid(row=0, column=2, padx=(4, 10), pady=(10, 3))
+                      ).grid(row=0, column=2, padx=(4, 10), pady=(10, 4))
 
-        # Tobias row
-        ctk.CTkLabel(url_row, text="Tobias link:", font=("Arial", 10),
-                     text_color=MUTED).grid(row=1, column=0, padx=(12, 6), pady=3, sticky="w")
-        self._tobias_lbl = ctk.CTkLabel(url_row, text="Detecting…",
-                                         font=("Arial", 10, "bold"), text_color=ACCENT2, anchor="w")
-        self._tobias_lbl.grid(row=1, column=1, sticky="w", pady=3)
-        tobias_btns = ctk.CTkFrame(url_row, fg_color="transparent")
-        tobias_btns.grid(row=1, column=2, padx=(4, 10), pady=3)
-        ctk.CTkButton(tobias_btns, text="Copy", width=55, height=22,
-                      fg_color="transparent", hover_color=PANEL, text_color=MUTED,
-                      font=("Arial", 10), corner_radius=4,
-                      command=self._copy_tobias_url).pack(side="left")
-        self._tobias_dot = ctk.CTkLabel(tobias_btns, text="●",
-                                         font=("Arial", 12), text_color=MUTED)
-        self._tobias_dot.pack(side="left", padx=(4, 0))
+        # Share with Tobias section header
+        ctk.CTkLabel(url_row, text="Share with Tobias", font=("Arial", 10, "bold"),
+                     text_color=TEXT, anchor="w"
+                     ).grid(row=1, column=0, columnspan=3,
+                            padx=12, pady=(6, 2), sticky="w")
 
-        # Firewall row
-        ctk.CTkLabel(url_row, text="Firewall:", font=("Arial", 10),
-                     text_color=MUTED).grid(row=2, column=0, padx=(12, 6), pady=3, sticky="w")
-        self._fw_lbl = ctk.CTkLabel(url_row, text="Checking…",
-                                     font=("Arial", 10), text_color=MUTED, anchor="w")
-        self._fw_lbl.grid(row=2, column=1, sticky="w", pady=3)
-        self._fw_btn = ctk.CTkButton(url_row, text="Open port", width=80, height=22,
-                                      fg_color=ACCENT, hover_color=ACCENT_HV, text_color=TEXT,
-                                      font=("Arial", 10), corner_radius=4,
-                                      command=self._fix_firewall)
-        self._fw_btn.grid(row=2, column=2, padx=(4, 10), pady=3)
+        # Step 1 — VS Code Live Share (primary, always works)
+        step1 = ctk.CTkFrame(url_row, fg_color="transparent")
+        step1.grid(row=2, column=0, columnspan=3, sticky="ew", padx=12, pady=1)
+        ctk.CTkLabel(step1, text="1.", font=("Arial", 10, "bold"),
+                     text_color=ACCENT2, width=16).pack(side="left")
+        ctk.CTkLabel(step1, text="VS Code → Live Share panel → Share Server → 3100",
+                     font=("Arial", 10), text_color=TEXT, anchor="w").pack(side="left")
+        ctk.CTkButton(step1, text="Copy port", width=72, height=20,
+                      fg_color=PANEL, hover_color=PANEL2, text_color=MUTED,
+                      font=("Arial", 9), corner_radius=4,
+                      command=lambda: (self.clipboard_clear(), self.clipboard_append("3100"))
+                      ).pack(side="right", padx=(0, 4))
 
-        # Live Share tip
-        ctk.CTkLabel(url_row,
-                     text="💡 Remote? VS Code → Live Share → Share Server → port 3100",
-                     font=("Arial", 9), text_color=MUTED, anchor="w"
-                     ).grid(row=3, column=0, columnspan=3,
-                            padx=12, pady=(4, 10), sticky="w")
+        # Step 2 — ngrok (backup, works without Live Share)
+        step2 = ctk.CTkFrame(url_row, fg_color="transparent")
+        step2.grid(row=3, column=0, columnspan=3, sticky="ew", padx=12, pady=1)
+        ctk.CTkLabel(step2, text="2.", font=("Arial", 10, "bold"),
+                     text_color=MUTED, width=16).pack(side="left")
+        ctk.CTkLabel(step2, text="Or run:  ngrok http 3100  → send Tobias the https:// URL",
+                     font=("Arial", 10), text_color=MUTED, anchor="w").pack(side="left")
+        self._ngrok_btn = ctk.CTkButton(
+            step2, text="▶ Start ngrok", width=90, height=20,
+            fg_color=PANEL, hover_color=PANEL2, text_color=MUTED,
+            font=("Arial", 9), corner_radius=4,
+            command=self._start_ngrok)
+        self._ngrok_btn.pack(side="right", padx=(0, 4))
+
+        # ngrok URL display
+        self._ngrok_lbl = ctk.CTkLabel(url_row, text="",
+                                        font=("Arial", 10, "bold"), text_color=ACCENT2, anchor="w")
+        self._ngrok_lbl.grid(row=4, column=0, columnspan=3,
+                              padx=(44, 12), pady=(0, 10), sticky="w")
+
+        # Hidden tobias_lbl kept for _copy_tobias_url / _refresh_tobias_url compatibility
+        self._tobias_lbl = ctk.CTkLabel(url_row, text="", font=("Arial", 1))
+        self._tobias_dot = ctk.CTkLabel(url_row, text="", font=("Arial", 1))
+        self._fw_lbl = ctk.CTkLabel(url_row, text="", font=("Arial", 1))
+        self._fw_btn = ctk.CTkButton(url_row, text="", width=1, height=1,
+                                      fg_color="transparent", hover_color="transparent",
+                                      command=lambda: None)
+        self._ngrok_proc = None
 
         # ── AI Backend ────────────────────────────────────────────────────────
         ai_card = ctk.CTkFrame(self, fg_color=PANEL, corner_radius=12)
@@ -3699,8 +3712,6 @@ class PaperclipFrame(ctk.CTkFrame):
 
         # Initial state refresh
         self.after(300, self._refresh_status)
-        self.after(500, self._refresh_tobias_url)
-        self.after(900, self._check_firewall_status)
 
     # ── Helpers ───────────────────────────────────────────────────────────────
 
@@ -3744,8 +3755,46 @@ class PaperclipFrame(ctk.CTkFrame):
             self._stop_btn.configure(state="disabled")
 
     def _refresh_tobias_url(self):
-        url = self._pm.get_tobias_url()
-        self._tobias_lbl.configure(text=url)
+        pass  # replaced by Live Share / ngrok approach
+
+    def _start_ngrok(self):
+        """Launch ngrok http 3100 and extract the public URL."""
+        import subprocess as _sp, threading as _t, re as _re
+        if not shutil.which("ngrok"):
+            self._ngrok_lbl.configure(
+                text="ngrok not installed — download free at ngrok.com/download",
+                text_color=RED_LIGHT)
+            return
+        self._ngrok_btn.configure(state="disabled", text="Starting…")
+        self._ngrok_lbl.configure(text="Launching ngrok…", text_color=GOLD)
+
+        def _run_ngrok():
+            try:
+                proc = _sp.Popen(
+                    "ngrok http 3100 --log=stdout",
+                    stdout=_sp.PIPE, stderr=_sp.STDOUT,
+                    text=True, shell=True
+                )
+                self._ngrok_proc = proc
+                for line in proc.stdout:
+                    m = _re.search(r"https://[a-z0-9\-]+\.ngrok[.-][\w./]+", line)
+                    if m:
+                        url = m.group(0)
+                        self.after(0, lambda u=url: self._on_ngrok_url(u))
+                        break
+            except Exception as e:
+                self.after(0, lambda: self._ngrok_lbl.configure(
+                    text=f"ngrok error: {e}", text_color=RED_LIGHT))
+
+        _t.Thread(target=_run_ngrok, daemon=True).start()
+
+    def _on_ngrok_url(self, url: str):
+        self._ngrok_lbl.configure(text=f"Tobias URL: {url}", text_color=ACCENT2)
+        self._ngrok_btn.configure(text="Copy URL", state="normal",
+                                   command=lambda: (self.clipboard_clear(),
+                                                    self.clipboard_append(url),
+                                                    self._ngrok_btn.configure(text="Copied!")))
+        self._log_msg(f"ngrok URL for Tobias: {url}")
 
     def _check_firewall_status(self):
         def _do():
