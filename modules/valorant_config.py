@@ -263,3 +263,41 @@ class ValorantConfig:
                 "matches":     cur_val.lower() == recommended.lower(),
             })
         return rows
+
+    # ── Crosshair Backup / Restore ────────────────────────────────────────────
+
+    def get_crosshair_code(self) -> str | None:
+        """Read CrosshairProfileSettings from GameUserSettings.ini."""
+        path = self.find_config_path()
+        if not path:
+            return None
+        try:
+            cfg = configparser.RawConfigParser()
+            cfg.optionxform = str
+            cfg.read(path, encoding="utf-8")
+            section = "/Script/ShooterGame.ShooterGameUserSettings"
+            if cfg.has_option(section, "CrosshairProfileSettings"):
+                return cfg.get(section, "CrosshairProfileSettings")
+        except Exception:
+            pass
+        return None
+
+    def set_crosshair_code(self, code: str) -> tuple:
+        """Write CrosshairProfileSettings to GameUserSettings.ini."""
+        path = self.find_config_path()
+        if not path:
+            return False, "Config file not found — launch Valorant once to generate it."
+        self.backup_config()
+        try:
+            cfg = configparser.RawConfigParser()
+            cfg.optionxform = str
+            cfg.read(path, encoding="utf-8")
+            section = "/Script/ShooterGame.ShooterGameUserSettings"
+            if not cfg.has_section(section):
+                return False, "Section not found in config — launch Valorant once to generate it."
+            cfg.set(section, "CrosshairProfileSettings", code)
+            with open(path, "w", encoding="utf-8") as f:
+                cfg.write(f)
+            return True, "Crosshair applied — restart Valorant to see changes."
+        except Exception as e:
+            return False, str(e)
