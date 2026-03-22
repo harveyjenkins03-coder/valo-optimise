@@ -7,7 +7,7 @@
 
 ## 🔴 To Do
 
-- [ ] **GitHub Projects Board** — Set up kanban on GitHub (Settings → Projects → New)
+*(nothing — all features shipped!)*
 
 ---
 
@@ -19,6 +19,7 @@
 
 ## 🟢 Done
 
+- [x] **AI Agents (Paperclip)** — Full Paperclip tab: auto-install, server start/stop, OpenClaw AI config, Harvey + Tobias URLs
 - [x] **Global Hotkey** — Ctrl+Shift+B triggers Pre-Game Boost from anywhere (keyboard package, graceful fallback)
 - [x] **Toast Notifications** — Windows native notification when boost completes (PowerShell WinRT toast)
 - [x] **Auto-Restore on Exit** — Prompts to re-enable Windows Update + DiagTrack on close
