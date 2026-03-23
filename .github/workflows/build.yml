@@ -1,0 +1,65 @@
+name: Build & Release
+
+on:
+  push:
+    branches: [ master, main ]
+
+jobs:
+  build:
+    runs-on: windows-latest
+    permissions:
+      contents: write
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Set up Python 3.10
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.10"
+
+      - name: Install dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install pyinstaller
+          pip install -r requirements.txt
+
+      - name: Get version
+        id: version
+        shell: bash
+        run: echo "version=$(python -c 'from version import VERSION; print(VERSION)')" >> $GITHUB_OUTPUT
+
+      - name: Build exe with PyInstaller
+        run: pyinstaller valo_optimise.spec
+
+      - name: Verify exe was produced
+        shell: bash
+        run: |
+          ls dist/
+          test -f dist/ValoOptimise.exe && echo "Build OK" || (echo "Build FAILED" && exit 1)
+
+      - name: Create GitHub Release
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: v${{ steps.version.outputs.version }}
+          name: "Valo Optimise v${{ steps.version.outputs.version }}"
+          body: |
+            ## Valo Optimise v${{ steps.version.outputs.version }}
+
+            ### Install
+            1. Download `ValoOptimise.exe` below
+            2. Run as Administrator (right-click → Run as administrator)
+            3. Accept the UAC prompt
+
+            ### Requirements
+            - Windows 10 / 11
+            - Administrator rights
+
+            ---
+            *Built automatically from source by GitHub Actions.*
+          files: dist/ValoOptimise.exe
+          fail_on_unmatched_files: true
+          make_latest: true
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}

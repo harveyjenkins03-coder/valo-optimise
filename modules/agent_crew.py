@@ -74,7 +74,8 @@ def _load_ai_cfg() -> dict:
         return {}
 
 
-def save_ai_cfg(api_url: str = "", api_key: str = "", model: str = "") -> bool:
+def save_ai_cfg(api_url: str = "", api_key: str = "", model: str = "",
+                api_keys: list = None) -> bool:
     """Persist config to the secure location outside the workspace."""
     _CFG_DIR.mkdir(exist_ok=True)
     cfg = _load_ai_cfg()
@@ -84,6 +85,12 @@ def save_ai_cfg(api_url: str = "", api_key: str = "", model: str = "") -> bool:
         cfg["ai_api_key"] = api_key
     if model:
         cfg["ai_model"] = model
+    if api_keys is not None:
+        # Store deduplicated list; primary key stays as ai_api_key too
+        deduped = list(dict.fromkeys(k for k in api_keys if k))
+        cfg["ai_api_keys"] = deduped
+        if deduped and not cfg.get("ai_api_key"):
+            cfg["ai_api_key"] = deduped[0]
     try:
         _CFG_FILE.write_text(json.dumps(cfg, indent=2), encoding="utf-8")
         return True
@@ -160,12 +167,16 @@ def _ssl_context() -> ssl.SSLContext:
 
 class Agent:
     def __init__(self, name: str, icon: str, role: str,
-                 system_prompt: str, filename: str):
+                 system_prompt: str, filename: str,
+                 model: str = "", max_tokens: int = 0, context: str = "full"):
         self.name          = name
         self.icon          = icon
         self.role          = role
         self.system_prompt = system_prompt
         self.filename      = filename
+        self.model         = model        # optional per-agent model override
+        self.max_tokens    = max_tokens   # 0 = use global default
+        self.context       = context      # "full" | "minimal"
 
     # ── Run ───────────────────────────────────────────────────────────────────
 
@@ -223,6 +234,8 @@ class Agent:
             headers={
                 "Authorization": f"Bearer {api_key}",
                 "Content-Type":  "application/json",
+                "Accept":        "application/json",
+                "User-Agent":    "groq-python/0.11.0",
             },
             method="POST",
         )
@@ -342,6 +355,9 @@ def _parse_agent_file(path: Path) -> "Agent | None":
         text  = path.read_text(encoding="utf-8")
         lines = text.splitlines()
         name = icon = role = None
+        model = ""
+        max_tokens = 0
+        context = "full"
         body_start = 0
         for i, line in enumerate(lines):
             stripped = line.strip()
@@ -351,8 +367,18 @@ def _parse_agent_file(path: Path) -> "Agent | None":
                 icon = stripped[7:].strip()
             elif stripped.startswith("# Role:"):
                 role = stripped[7:].strip()
-            if name and icon and role and i > 2:
-                body_start = i + 1
+            elif stripped.startswith("# Model:"):
+                model = stripped[8:].strip()
+            elif stripped.startswith("# Max-Tokens:"):
+                try:
+                    max_tokens = int(stripped[13:].strip())
+                except ValueError:
+                    pass
+            elif stripped.startswith("# Context:"):
+                context = stripped[10:].strip().lower()
+            elif name and icon and role and not stripped.startswith("#"):
+                # First non-header line after required fields — body starts here
+                body_start = i
                 break
         if not (name and icon and role):
             return None
@@ -360,6 +386,7 @@ def _parse_agent_file(path: Path) -> "Agent | None":
         return Agent(
             name=name, icon=icon, role=role,
             system_prompt=system_prompt, filename=path.name,
+            model=model, max_tokens=max_tokens, context=context,
         )
     except Exception:
         return None

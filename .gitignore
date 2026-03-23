@@ -34,6 +34,14 @@ $RECYCLE.BIN/
 # Secrets / env
 .env
 *.key
+*.pem
+workspace.cfg
+agent_config.json
+licence.json
+
+# PyInstaller
+*.spec
+*.exe
 
 # Workspace (separate repo — not part of this product)
 workspace/
