@@ -55,6 +55,7 @@ from modules.mouse_driver import (
     SensitivityProfileManager, MouseDeviceInfo, RawInputChecker,
 )
 from modules.benchmark import SystemBenchmark, METRIC_ORDER
+from modules import licence_manager as _lic
 
 # ── Colors ───────────────────────────────────────────────────────────────────
 BG        = "#0a0e1a"   # deeper navy black
@@ -3549,14 +3550,17 @@ class App(ctk.CTk):
         sidebar.grid_rowconfigure(26, weight=1)      # push bottom frame down
 
         # ── Logo ──
+        self._tier = _lic.get_tier()
         logo_wrap = ctk.CTkFrame(sidebar, fg_color="transparent")
         logo_wrap.grid(row=0, column=0, columnspan=2, pady=(20, 6), padx=14, sticky="w")
         ctk.CTkLabel(logo_wrap, text="VALO", font=("Arial", 20, "bold"),
                      text_color=ACCENT).pack(side="left", padx=(0, 3))
         ctk.CTkLabel(logo_wrap, text="OPTIMISE", font=("Arial", 14, "bold"),
                      text_color=TEXT).pack(side="left")
-        ctk.CTkLabel(logo_wrap, text=" PRO", font=("Arial", 8, "bold"),
-                     text_color=GOLD).pack(side="left", anchor="s", pady=(0, 2))
+        _tier_label = " PRO" if self._tier in ("pro", "lifetime") else " FREE"
+        _tier_color = GOLD if self._tier in ("pro", "lifetime") else MUTED
+        ctk.CTkLabel(logo_wrap, text=_tier_label, font=("Arial", 8, "bold"),
+                     text_color=_tier_color).pack(side="left", anchor="s", pady=(0, 2))
 
         ctk.CTkFrame(sidebar, fg_color=BORDER, height=1).grid(
             row=1, column=0, columnspan=2, sticky="ew", padx=10, pady=(0, 4))
@@ -3607,12 +3611,16 @@ class App(ctk.CTk):
             ind.grid(row=grid_row, column=0, padx=(4, 0), pady=2, sticky="ns")
             self._nav_indicators[key] = ind
 
+            _is_pro_tab = key in _lic.PRO_TABS
+            _locked     = _is_pro_tab and not _lic.is_pro()
+            _btn_label  = label + ("  🔒" if _locked else "")
             btn = ctk.CTkButton(
-                sidebar, text=label,
+                sidebar, text=_btn_label,
                 command=lambda k=key: self._show_frame(k),
                 anchor="w", width=198, height=30,
                 fg_color="transparent", hover_color=SIDEBAR_ACT,
-                text_color=MUTED, font=("Arial", 11),
+                text_color=MUTED if not _locked else "#3a4e66",
+                font=("Arial", 11),
                 corner_radius=6
             )
             btn.grid(row=grid_row, column=1, padx=(2, 8), pady=2, sticky="ew")
@@ -3641,6 +3649,14 @@ class App(ctk.CTk):
                      text_color=GREEN).grid(row=1, column=0, sticky="w", pady=(3, 0))
         ctk.CTkLabel(bottom_frame, text="✓ No Data Collected", font=("Arial", 8),
                      text_color=GREEN).grid(row=2, column=0, sticky="w")
+        _lic_btn_text = "⭐ Upgrade to Pro" if not _lic.is_pro() else "🔑 Licence"
+        ctk.CTkButton(bottom_frame, text=_lic_btn_text,
+                      command=self._show_licence_dialog,
+                      fg_color=ACCENT if not _lic.is_pro() else PANEL2,
+                      hover_color="#e63946" if not _lic.is_pro() else PANEL,
+                      text_color=TEXT, font=("Arial", 9, "bold"),
+                      height=26, corner_radius=6
+                      ).grid(row=3, column=0, sticky="ew", pady=(6, 0))
 
         # Content area
         content = ctk.CTkFrame(self, fg_color=BG, corner_radius=0)
@@ -3687,6 +3703,11 @@ class App(ctk.CTk):
             ))
 
     def _show_frame(self, key: str):
+        # Gate Pro tabs
+        if key in _lic.PRO_TABS and not _lic.is_pro():
+            self._show_upgrade_prompt(key)
+            return
+
         # Deactivate previous indicator
         if self._active_key:
             prev_ind = self._nav_indicators.get(self._active_key)
@@ -3713,6 +3734,126 @@ class App(ctk.CTk):
                 frame.tkraise()
             else:
                 frame.lower()
+
+    # ── Licence dialogs ───────────────────────────────────────────────────────
+
+    def _show_upgrade_prompt(self, tab_key: str):
+        """Shown when a free user clicks a Pro tab."""
+        dlg = ctk.CTkToplevel(self)
+        dlg.title("Upgrade to Pro")
+        dlg.geometry("420x320")
+        dlg.resizable(False, False)
+        dlg.configure(fg_color=PANEL)
+        dlg.grab_set()
+        dlg.focus()
+
+        ctk.CTkLabel(dlg, text="🔒  Pro Feature", font=("Arial", 18, "bold"),
+                     text_color=GOLD).pack(pady=(28, 6))
+        tab_name = tab_key.replace("mousedriver", "Mouse Driver").replace("valorant", "Valorant Config").title()
+        ctk.CTkLabel(dlg, text=f"{tab_name} is included in Valo Optimise Pro.",
+                     font=("Arial", 12), text_color=MUTED, wraplength=360).pack(pady=(0, 4))
+        ctk.CTkLabel(dlg, text="Unlock all 9 Pro modules for £4.99/mo or £69.99 lifetime.",
+                     font=("Arial", 11), text_color=MUTED, wraplength=360).pack(pady=(0, 20))
+
+        def _open_buy():
+            import webbrowser
+            webbrowser.open("https://valooptimise.harveyjenkins03.workers.dev/#pricing")
+            dlg.destroy()
+
+        ctk.CTkButton(dlg, text="⭐ Get Pro — £4.99/mo", command=_open_buy,
+                      fg_color=ACCENT, hover_color="#e63946",
+                      font=("Arial", 13, "bold"), height=40, corner_radius=8,
+                      width=340).pack(pady=(0, 8))
+        ctk.CTkButton(dlg, text="🔑 I have a key — Activate",
+                      command=lambda: (dlg.destroy(), self._show_licence_dialog()),
+                      fg_color=PANEL2, hover_color=PANEL, text_color=TEXT,
+                      font=("Arial", 11), height=34, corner_radius=8,
+                      width=340).pack(pady=(0, 8))
+        ctk.CTkButton(dlg, text="Maybe later", command=dlg.destroy,
+                      fg_color="transparent", hover_color=PANEL2, text_color=MUTED,
+                      font=("Arial", 10), height=28, corner_radius=6,
+                      width=340).pack()
+
+    def _show_licence_dialog(self):
+        """Licence management — activate a key or view current licence."""
+        info = _lic.get_info()
+        dlg  = ctk.CTkToplevel(self)
+        dlg.title("Licence")
+        dlg.geometry("400x340")
+        dlg.resizable(False, False)
+        dlg.configure(fg_color=PANEL)
+        dlg.grab_set()
+        dlg.focus()
+
+        tier = info["tier"]
+        ctk.CTkLabel(dlg, text="🔑  Licence Manager", font=("Arial", 16, "bold"),
+                     text_color=TEXT).pack(pady=(24, 4))
+
+        if tier in ("pro", "lifetime"):
+            badge = "⭐ PRO" if tier == "pro" else "♾ LIFETIME"
+            ctk.CTkLabel(dlg, text=badge, font=("Arial", 13, "bold"),
+                         text_color=GOLD).pack(pady=(0, 4))
+            ctk.CTkLabel(dlg, text=f"Key: {info['key_masked']}",
+                         font=("Arial", 10), text_color=MUTED).pack()
+            if info["email"]:
+                ctk.CTkLabel(dlg, text=info["email"],
+                             font=("Arial", 10), text_color=MUTED).pack(pady=(2, 0))
+            ctk.CTkLabel(dlg, text="All Pro features are unlocked.",
+                         font=("Arial", 11), text_color=ACCENT2).pack(pady=(12, 20))
+            ctk.CTkButton(dlg, text="Remove Licence", command=lambda: self._deactivate(dlg),
+                          fg_color=PANEL2, hover_color=PANEL, text_color=MUTED,
+                          font=("Arial", 10), height=28, width=180).pack()
+        else:
+            ctk.CTkLabel(dlg, text="FREE tier — enter your key to unlock Pro features.",
+                         font=("Arial", 11), text_color=MUTED, wraplength=340).pack(pady=(0, 16))
+            key_var = ctk.StringVar()
+            ctk.CTkEntry(dlg, textvariable=key_var, placeholder_text="XXXX-XXXX-XXXX-XXXX",
+                         width=340, height=36, font=("Arial", 12)).pack(pady=(0, 8))
+            status_lbl = ctk.CTkLabel(dlg, text="", font=("Arial", 10), text_color=MUTED)
+            status_lbl.pack(pady=(0, 8))
+
+            def _activate():
+                status_lbl.configure(text="Validating…", text_color=MUTED)
+                dlg.update()
+                ok, msg = _lic.activate(key_var.get())
+                if ok:
+                    status_lbl.configure(text=f"✓ {msg}", text_color=ACCENT2)
+                    self.after(1200, lambda: (dlg.destroy(), self._restart_notice()))
+                else:
+                    status_lbl.configure(text=f"✗ {msg}", text_color=ACCENT)
+
+            ctk.CTkButton(dlg, text="Activate Key", command=_activate,
+                          fg_color=ACCENT2, hover_color="#00b899", text_color=BG,
+                          font=("Arial", 12, "bold"), height=36, width=340).pack(pady=(0, 8))
+
+            def _open_buy():
+                import webbrowser
+                webbrowser.open("https://valooptimise.harveyjenkins03.workers.dev/#pricing")
+            ctk.CTkButton(dlg, text="⭐ Buy Pro — £4.99/mo", command=_open_buy,
+                          fg_color=ACCENT, hover_color="#e63946", text_color=TEXT,
+                          font=("Arial", 11, "bold"), height=34, width=340).pack()
+
+        ctk.CTkButton(dlg, text="Close", command=dlg.destroy,
+                      fg_color="transparent", hover_color=PANEL2, text_color=MUTED,
+                      font=("Arial", 10), height=26, width=340).pack(pady=(10, 0))
+
+    def _deactivate(self, dlg):
+        _lic.deactivate()
+        dlg.destroy()
+        self._restart_notice()
+
+    def _restart_notice(self):
+        dlg = ctk.CTkToplevel(self)
+        dlg.title("Restart Required")
+        dlg.geometry("340x160")
+        dlg.resizable(False, False)
+        dlg.configure(fg_color=PANEL)
+        dlg.grab_set()
+        ctk.CTkLabel(dlg, text="Restart Valo Optimise to apply\nyour licence changes.",
+                     font=("Arial", 13), text_color=TEXT).pack(pady=(36, 20))
+        ctk.CTkButton(dlg, text="OK", command=dlg.destroy,
+                      fg_color=ACCENT, font=("Arial", 11, "bold"),
+                      height=32, width=200).pack()
 
     # ── Global Hotkey ─────────────────────────────────────────────────────────
 
