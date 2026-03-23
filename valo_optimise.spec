@@ -41,6 +41,7 @@ a = Analysis(
         'modules.valorant_config',
         'modules.startup_manager',
         'modules.stats_tracker',
+        'modules.licence_manager',
         'modules.auto_updater',
         'modules.benchmark',
         'modules.visibility_optimizer',
