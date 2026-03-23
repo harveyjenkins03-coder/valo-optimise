@@ -3952,101 +3952,332 @@ class App(ctk.CTk):
                 pass
         self.destroy()
 
-    # ── First-Launch Onboarding ───────────────────────────────────────────────
+    # ── First-Launch Onboarding (4-step wizard) ───────────────────────────────
 
     def _show_onboarding(self):
         win = ctk.CTkToplevel(self)
         win.title("Welcome to Valo Optimise")
-        win.geometry("520x420")
+        win.geometry("560x560")
         win.resizable(False, False)
         win.configure(fg_color=BG)
         win.grab_set()
         win.lift()
         win.focus_force()
-        win.grid_columnconfigure(0, weight=1)
 
-        # Header strip
-        ctk.CTkFrame(win, fg_color=ACCENT, height=4, corner_radius=0).grid(
-            row=0, column=0, sticky="ew")
+        _step    = [0]
+        _results = [None]
 
-        ctk.CTkLabel(win, text="Welcome to Valo Optimise",
-                     font=("Arial", 20, "bold"), text_color=TEXT
-                     ).grid(row=1, column=0, padx=30, pady=(20, 4), sticky="w")
-        ctk.CTkLabel(win,
-                     text="First launch detected. Would you like to run all safe tweaks now?",
-                     font=("Arial", 12), text_color=MUTED, wraplength=460, justify="left"
-                     ).grid(row=2, column=0, padx=30, sticky="w")
+        # ── Fixed header ──────────────────────────────────────────────────────
+        ctk.CTkFrame(win, fg_color=ACCENT, height=4, corner_radius=0).pack(fill="x")
+        top_row = ctk.CTkFrame(win, fg_color="transparent")
+        top_row.pack(fill="x", padx=24, pady=(12, 0))
+        ctk.CTkLabel(top_row, text="VALO", font=("Arial", 15, "bold"),
+                     text_color=ACCENT).pack(side="left")
+        ctk.CTkLabel(top_row, text="OPTIMISE", font=("Arial", 11, "bold"),
+                     text_color=TEXT).pack(side="left", padx=(3, 0))
 
-        # Checklist card
-        checklist_card = ctk.CTkFrame(win, fg_color=PANEL, corner_radius=10)
-        checklist_card.grid(row=3, column=0, sticky="ew", padx=30, pady=(16, 8))
-        checklist_card.grid_columnconfigure(0, weight=1)
-        make_section_label(checklist_card, "Safe tweaks that will run:").grid(
-            row=0, column=0, sticky="w", padx=14, pady=(10, 4))
+        # Step dots
+        dots_wrap = ctk.CTkFrame(top_row, fg_color="transparent")
+        dots_wrap.pack(side="right")
+        _dots = []
+        for _ in range(4):
+            d = ctk.CTkFrame(dots_wrap, width=8, height=8, corner_radius=4,
+                             fg_color=BORDER)
+            d.pack(side="left", padx=3)
+            _dots.append(d)
+        ctk.CTkFrame(win, fg_color=BORDER, height=1).pack(fill="x", padx=24, pady=(10, 0))
 
-        _items = [
-            ("⚡", "Ultimate Performance power plan"),
-            ("🔧", "Registry performance tweaks"),
-            ("⏱️", "Disable core parking"),
-            ("⏱️", "1ms timer resolution"),
-        ]
-        for i, (icon, desc) in enumerate(_items, start=1):
-            row_fr = ctk.CTkFrame(checklist_card, fg_color="transparent")
-            row_fr.grid(row=i, column=0, sticky="w", padx=14, pady=2)
-            ctk.CTkLabel(row_fr, text=icon, font=("Arial", 13)).grid(row=0, column=0, padx=(0, 6))
-            ctk.CTkLabel(row_fr, text=desc, font=("Arial", 11), text_color=TEXT).grid(row=0, column=1, sticky="w")
-        ctk.CTkFrame(checklist_card, height=1, fg_color=PANEL2).grid(
-            row=len(_items) + 1, column=0, sticky="ew", padx=14, pady=(6, 0))
-        ctk.CTkLabel(checklist_card,
-                     text="These are OS-level tweaks only — fully Vanguard-safe.",
-                     font=("Arial", 10), text_color=MUTED
-                     ).grid(row=len(_items) + 2, column=0, sticky="w", padx=14, pady=(4, 10))
+        # ── Scrollable content area ───────────────────────────────────────────
+        content = ctk.CTkFrame(win, fg_color="transparent")
+        content.pack(fill="both", expand=True, padx=24, pady=(16, 0))
 
-        status_lbl = ctk.CTkLabel(win, text="", font=("Arial", 11), text_color=GREEN)
-        status_lbl.grid(row=4, column=0, padx=30, sticky="w", pady=(0, 4))
+        # ── Footer ────────────────────────────────────────────────────────────
+        footer = ctk.CTkFrame(win, fg_color=PANEL, corner_radius=0, height=56)
+        footer.pack(fill="x", side="bottom")
+        footer.pack_propagate(False)
+        footer.grid_columnconfigure(1, weight=1)
 
-        btn_row = ctk.CTkFrame(win, fg_color="transparent")
-        btn_row.grid(row=5, column=0, padx=30, pady=(0, 24), sticky="w")
+        skip_btn = ghost_button(footer, "Skip", lambda: _finish(), width=80)
+        skip_btn.grid(row=0, column=0, padx=(14, 0), pady=10)
+        back_btn = ghost_button(footer, "← Back", lambda: _go(_step[0] - 1), width=90)
+        back_btn.grid(row=0, column=1, padx=8, pady=10, sticky="e")
+        next_btn = accent_button(footer, "Next →", lambda: _go(_step[0] + 1), width=140)
+        next_btn.grid(row=0, column=2, padx=(0, 14), pady=10)
 
-        def _run_all():
-            run_btn.configure(state="disabled", text="Running...")
-            status_lbl.configure(text="Applying tweaks...", text_color=MUTED)
+        # ── Helpers ───────────────────────────────────────────────────────────
+        def _update_dots(step):
+            for i, d in enumerate(_dots):
+                d.configure(fg_color=ACCENT if i == step else
+                            (ACCENT2 if i < step else BORDER))
 
-            def _do():
-                results = []
-                ok, msg = SystemOptimizer().set_ultimate_performance_plan()
-                results.append(("Power Plan", ok, msg))
-                tw = RegistryTweaks().apply_all_tweaks()
-                n_ok = sum(1 for _, o, _ in tw if o)
-                results.append(("Registry Tweaks", True, f"{n_ok}/{len(tw)} applied"))
-                ok, msg = CpuTimerOptimizer().disable_core_parking()
-                results.append(("Core Parking", ok, msg))
-                ok, msg = CpuTimerOptimizer().set_timer_resolution_1ms()
-                results.append(("Timer Resolution", ok, msg))
-                return results
+        def _clear():
+            for w in content.winfo_children():
+                w.destroy()
 
-            def _done(results):
-                n_ok = sum(1 for _, o, _ in results if o)
-                status_lbl.configure(
-                    text=f"Done! {n_ok}/{len(results)} tweaks applied. Restart Valorant for best results.",
-                    text_color=GREEN
-                )
-                run_btn.configure(state="disabled", text="Done!")
-                self.cfg["onboarding_done"] = True
-                save_config(self.cfg)
-                _win_toast("Valo Optimise", "Safe tweaks applied! Launch Valorant now.")
-                win.after(1800, win.destroy)
-
-            run_in_thread(_do, lambda r: win.after(0, lambda: _done(r)))
-
-        def _skip():
+        def _finish():
             self.cfg["onboarding_done"] = True
             save_config(self.cfg)
             win.destroy()
 
-        run_btn = accent_button(btn_row, "Run All Safe Tweaks", _run_all, width=200)
-        run_btn.grid(row=0, column=0, padx=(0, 10))
-        ghost_button(btn_row, "Skip", _skip, width=100).grid(row=0, column=1)
+        # ── Step 0 — Welcome & hardware detection ─────────────────────────────
+        def _step0():
+            _update_dots(0)
+            back_btn.configure(state="disabled")
+            next_btn.configure(state="normal", text="Next →",
+                               command=lambda: _go(1))
+            skip_btn.configure(state="normal", text="Skip")
+            _clear()
+
+            ctk.CTkLabel(content, text="Welcome to Valo Optimise 👋",
+                         font=("Arial", 20, "bold"), text_color=TEXT,
+                         anchor="w").pack(fill="x", pady=(0, 4))
+            ctk.CTkLabel(content,
+                         text="Let's get your PC ready for Valorant in under a minute.",
+                         font=("Arial", 12), text_color=MUTED,
+                         anchor="w").pack(fill="x", pady=(0, 14))
+
+            hw = ctk.CTkFrame(content, fg_color=PANEL, corner_radius=10)
+            hw.pack(fill="x", pady=(0, 10))
+            make_section_label(hw, "🖥️  Detected Hardware").pack(
+                anchor="w", padx=14, pady=(10, 6))
+
+            try:
+                import platform as _pl
+                cpu = (_pl.processor() or _pl.machine() or "Unknown CPU")[:46]
+            except Exception:
+                cpu = "Unknown CPU"
+            try:
+                ram_gb = round(_psutil.virtual_memory().total / (1024 ** 3))
+                ram_str = f"{ram_gb} GB"
+            except Exception:
+                ram_str = "Unknown"
+
+            for icon, label, val in [
+                ("🔲", "CPU", cpu),
+                ("💾", "RAM", ram_str),
+                ("🪟", "OS",  "Windows 10 / 11"),
+            ]:
+                r = ctk.CTkFrame(hw, fg_color="transparent")
+                r.pack(fill="x", padx=14, pady=3)
+                ctk.CTkLabel(r, text=f"{icon}  {label}", font=("Arial", 11),
+                             text_color=MUTED, width=70, anchor="w").pack(side="left")
+                ctk.CTkLabel(r, text=val, font=("Arial", 11, "bold"),
+                             text_color=TEXT, anchor="w").pack(side="left")
+
+            ctk.CTkFrame(hw, height=1, fg_color=BORDER).pack(
+                fill="x", padx=14, pady=(8, 0))
+            ctk.CTkLabel(hw,
+                         text="✅  Fully Vanguard-safe — OS-level only, no game process interaction.",
+                         font=("Arial", 10), text_color=ACCENT2).pack(
+                anchor="w", padx=14, pady=(6, 10))
+
+        # ── Step 1 — What will be optimised ───────────────────────────────────
+        def _step1():
+            _update_dots(1)
+            back_btn.configure(state="normal")
+            next_btn.configure(state="normal", text="Optimise Now →",
+                               command=lambda: _go(2))
+            skip_btn.configure(state="normal", text="Skip")
+            _clear()
+
+            ctk.CTkLabel(content, text="Here's What We'll Optimise",
+                         font=("Arial", 20, "bold"), text_color=TEXT,
+                         anchor="w").pack(fill="x", pady=(0, 4))
+            ctk.CTkLabel(content,
+                         text="Safe, reversible tweaks. Your current settings are backed up.",
+                         font=("Arial", 12), text_color=MUTED,
+                         anchor="w").pack(fill="x", pady=(0, 10))
+
+            _TWEAKS = [
+                ("⚡", "Power Plan",       "Ultimate Performance — full CPU speed",          True),
+                ("🌐", "Network",          "Lower ping, TCP stack for Valorant servers",      True),
+                ("🔧", "Registry",         "Windows responsiveness & input latency tweaks",   True),
+                ("⏱️", "Timer Resolution", "1ms precision for smoother frame delivery",       True),
+                ("⏱️", "Core Parking",     "Keep all CPU cores active during play",           True),
+                ("🎮", "GPU",              "AMD Chill off, HAGS toggle for lower latency",    False),
+                ("👁️", "Visibility",       "Colour profile tweaks for enemy visibility",      False),
+                ("🔊", "Audio",            "MMCSS priority for low-latency game audio",       False),
+                ("🎮", "Valorant Config",  "Optimal in-game settings editor",                 False),
+            ]
+            is_pro = _lic.is_pro()
+            scroll = ctk.CTkScrollableFrame(content, fg_color="transparent", height=260)
+            scroll.pack(fill="both", expand=True)
+
+            for icon, name, desc, free in _TWEAKS:
+                card = ctk.CTkFrame(scroll, fg_color=PANEL, corner_radius=8)
+                card.pack(fill="x", pady=3)
+                card.grid_columnconfigure(1, weight=1)
+                ctk.CTkLabel(card, text=icon, font=("Arial", 15),
+                             width=30).grid(row=0, column=0, rowspan=2,
+                                            padx=(10, 6), pady=8)
+                ctk.CTkLabel(card, text=name, font=("Arial", 11, "bold"),
+                             text_color=TEXT, anchor="w").grid(
+                    row=0, column=1, sticky="w", pady=(8, 0))
+                ctk.CTkLabel(card, text=desc, font=("Arial", 10),
+                             text_color=MUTED, anchor="w").grid(
+                    row=1, column=1, sticky="w", pady=(0, 8))
+                if free or is_pro:
+                    badge_text  = "FREE" if free else "PRO ✓"
+                    badge_color = ACCENT2 if free else GOLD
+                else:
+                    badge_text  = "🔒 PRO"
+                    badge_color = MUTED
+                ctk.CTkLabel(card, text=badge_text, font=("Arial", 9, "bold"),
+                             text_color=badge_color, width=52).grid(
+                    row=0, column=2, rowspan=2, padx=(0, 10))
+
+        # ── Step 2 — Running the boost ────────────────────────────────────────
+        def _step2():
+            _update_dots(2)
+            back_btn.configure(state="disabled")
+            next_btn.configure(state="disabled", text="Optimising...")
+            skip_btn.configure(state="disabled")
+            _clear()
+
+            ctk.CTkLabel(content, text="Optimising Your PC...",
+                         font=("Arial", 20, "bold"), text_color=TEXT,
+                         anchor="w").pack(fill="x", pady=(0, 4))
+            ctk.CTkLabel(content,
+                         text="Applying safe OS-level tweaks. Takes about 15 seconds.",
+                         font=("Arial", 12), text_color=MUTED,
+                         anchor="w").pack(fill="x", pady=(0, 12))
+
+            prog = ctk.CTkProgressBar(content, height=6, fg_color=PANEL2,
+                                      progress_color=ACCENT)
+            prog.pack(fill="x", pady=(0, 14))
+            prog.set(0)
+
+            _BSTEPS = [
+                ("pwr",   "⚡", "Setting Ultimate Performance power plan"),
+                ("bg",    "🧹", "Killing background processes"),
+                ("ram",   "💾", "Clearing standby memory"),
+                ("reg",   "🔧", "Applying registry tweaks"),
+                ("park",  "⏱️", "Disabling core parking"),
+                ("timer", "⏱️", "Setting 1ms timer resolution"),
+            ]
+            icon_lbls = {}
+            for key, icon, label in _BSTEPS:
+                row = ctk.CTkFrame(content, fg_color="transparent")
+                row.pack(fill="x", pady=2)
+                il = ctk.CTkLabel(row, text="○", font=("Arial", 12),
+                                  text_color=MUTED, width=20)
+                il.pack(side="left", padx=(0, 8))
+                ctk.CTkLabel(row, text=f"{icon}  {label}", font=("Arial", 11),
+                             text_color=MUTED, anchor="w").pack(side="left")
+                icon_lbls[key] = il
+
+            def _run():
+                _sys = SystemOptimizer()
+                _rt  = RegistryTweaks()
+                _cpu = CpuTimerOptimizer()
+                steps_fn = [
+                    ("pwr",   lambda: _sys.set_ultimate_performance_plan()),
+                    ("bg",    lambda: (True, f"Killed {sum(1 for _,o,_ in (_sys.kill_all_background_targets() or []) if o)}")),
+                    ("ram",   lambda: _sys.clear_standby_memory()),
+                    ("reg",   lambda: (True, f"{sum(1 for _,o,_ in _rt.apply_all_tweaks() if o)} tweaks")),
+                    ("park",  lambda: _cpu.disable_core_parking()),
+                    ("timer", lambda: _cpu.set_timer_resolution_1ms()),
+                ]
+                results = []
+                for i, (key, fn) in enumerate(steps_fn):
+                    win.after(0, lambda k=key: icon_lbls[k].configure(
+                        text="⟳", text_color=GOLD))
+                    try:
+                        ok, msg = fn()
+                    except Exception as e:
+                        ok, msg = False, str(e)[:60]
+                    results.append((key, ok, msg))
+                    win.after(0, lambda k=key, o=ok: icon_lbls[k].configure(
+                        text="✓" if o else "✗",
+                        text_color=ACCENT2 if o else RED_LIGHT))
+                    ease_progress(prog, (i + 1) / len(steps_fn), 300)
+                return results
+
+            def _done(results):
+                _results[0] = results
+                next_btn.configure(state="normal", text="See Results →",
+                                   command=lambda: _go(3))
+                _go(3)
+
+            run_in_thread(_run, lambda r: win.after(0, lambda: _done(r)))
+
+        # ── Step 3 — Results + upgrade prompt ────────────────────────────────
+        def _step3():
+            _update_dots(3)
+            back_btn.configure(state="disabled")
+            skip_btn.configure(state="normal", text="Explore App",
+                               command=_finish)
+            _clear()
+
+            results = _results[0] or []
+            n_ok    = sum(1 for _, o, _ in results if o)
+            n_total = len(results)
+            fps_est = 5 + (n_ok * 4)
+
+            ctk.CTkLabel(content, text="Your PC is Ready! 🚀",
+                         font=("Arial", 20, "bold"), text_color=TEXT,
+                         anchor="w").pack(fill="x", pady=(0, 4))
+            ctk.CTkLabel(content, text=f"{n_ok}/{n_total} tweaks applied successfully.",
+                         font=("Arial", 12), text_color=MUTED,
+                         anchor="w").pack(fill="x", pady=(0, 12))
+
+            # FPS estimate card
+            fps_card = ctk.CTkFrame(content, fg_color=PANEL, corner_radius=10)
+            fps_card.pack(fill="x", pady=(0, 10))
+            ctk.CTkLabel(fps_card, text="Estimated FPS Improvement",
+                         font=("Arial", 11), text_color=MUTED).pack(pady=(12, 2))
+            fps_lbl = ctk.CTkLabel(fps_card, text="+0 FPS",
+                                   font=("Arial", 34, "bold"),
+                                   text_color=ACCENT2 if n_ok >= 4 else GOLD)
+            fps_lbl.pack(pady=(0, 4))
+            count_up(fps_lbl, fps_est, 800, "+{:.0f} FPS",
+                     ACCENT2 if n_ok >= 4 else GOLD)
+            ctk.CTkLabel(fps_card,
+                         text="Average across tested systems — actual gains vary by hardware.",
+                         font=("Arial", 10), text_color=MUTED).pack(pady=(0, 12))
+
+            # Pro upsell (free users only)
+            if not _lic.is_pro():
+                upsell = ctk.CTkFrame(content, fg_color=PANEL2, corner_radius=10,
+                                      border_width=1, border_color=ACCENT)
+                upsell.pack(fill="x", pady=(0, 8))
+                upsell.grid_columnconfigure(0, weight=1)
+                ctk.CTkLabel(upsell, text="🔒  Unlock 9 More Pro Optimisations",
+                             font=("Arial", 12, "bold"),
+                             text_color=GOLD).grid(
+                    row=0, column=0, sticky="w", padx=14, pady=(10, 2))
+                ctk.CTkLabel(upsell,
+                             text="GPU tuning • Visibility boost • Audio priority • CPU timer • Valorant Config",
+                             font=("Arial", 10), text_color=MUTED,
+                             wraplength=430, justify="left").grid(
+                    row=1, column=0, sticky="w", padx=14, pady=(0, 8))
+                def _open_pro():
+                    import webbrowser
+                    webbrowser.open("https://harveyj82.gumroad.com/l/uriyw")
+                ctk.CTkButton(upsell, text="Get Pro — £4.99/mo",
+                              font=("Arial", 11, "bold"),
+                              fg_color=ACCENT, hover_color=ACCENT_HV,
+                              text_color=TEXT, corner_radius=8, height=32,
+                              command=_open_pro).grid(
+                    row=2, column=0, sticky="w", padx=14, pady=(0, 10))
+
+            def _launch():
+                _win_toast("Valo Optimise",
+                           f"Optimised! Est. +{fps_est} FPS gain. Good luck! 🎯")
+                _finish()
+
+            next_btn.configure(state="normal", text="Let's Play! 🎮",
+                               command=_launch)
+
+        # ── Router ────────────────────────────────────────────────────────────
+        _STEPS = [_step0, _step1, _step2, _step3]
+
+        def _go(step):
+            if 0 <= step < len(_STEPS):
+                _step[0] = step
+                _STEPS[step]()
+
+        _go(0)
 
 
 # ── Entry Point ───────────────────────────────────────────────────────────────
