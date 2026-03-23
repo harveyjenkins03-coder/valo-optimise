@@ -44,6 +44,7 @@ jobs:
         with:
           tag_name: v${{ steps.version.outputs.version }}
           name: "Valo Optimise v${{ steps.version.outputs.version }}"
+          repository: harveyjenkins03-coder/valo-optimise-releases
           body: |
             ## Valo Optimise v${{ steps.version.outputs.version }}
 
@@ -62,4 +63,4 @@ jobs:
           fail_on_unmatched_files: true
           make_latest: true
         env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          GITHUB_TOKEN: ${{ secrets.RELEASE_PAT }}
