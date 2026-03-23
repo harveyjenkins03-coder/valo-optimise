@@ -68,7 +68,6 @@ a = Analysis(
         'email',
         'html',
         'http',
-        'xml',
         'xmlrpc',
         'test',
     ],
