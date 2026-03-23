@@ -40,27 +40,28 @@ jobs:
           test -f dist/ValoOptimise.exe && echo "Build OK" || (echo "Build FAILED" && exit 1)
 
       - name: Create GitHub Release
-        uses: softprops/action-gh-release@v2
-        with:
-          tag_name: v${{ steps.version.outputs.version }}
-          name: "Valo Optimise v${{ steps.version.outputs.version }}"
-          repository: harveyjenkins03-coder/valo-optimise-releases-public
-          body: |
-            ## Valo Optimise v${{ steps.version.outputs.version }}
-
-            ### Install
-            1. Download `ValoOptimise.exe` below
-            2. Run as Administrator (right-click → Run as administrator)
-            3. Accept the UAC prompt
-
-            ### Requirements
-            - Windows 10 / 11
-            - Administrator rights
-
-            ---
-            *Built automatically from source by GitHub Actions.*
-          files: dist/ValoOptimise.exe
-          fail_on_unmatched_files: true
-          make_latest: true
+        shell: bash
         env:
-          GITHUB_TOKEN: ${{ secrets.RELEASE_PAT }}
+          GH_TOKEN: ${{ secrets.RELEASE_PAT }}
+        run: |
+          VERSION="${{ steps.version.outputs.version }}"
+          REPO="harveyjenkins03-coder/valo-optimise-releases-public"
+          NOTES="## Valo Optimise v${VERSION}
+
+          ### Install
+          1. Download \`ValoOptimise.exe\` below
+          2. Run as Administrator (right-click → Run as administrator)
+          3. Accept the UAC prompt
+
+          ### Requirements
+          - Windows 10 / 11
+          - Administrator rights
+
+          ---
+          *Built automatically from source by GitHub Actions.*"
+
+          gh release create "v${VERSION}" dist/ValoOptimise.exe \
+            --repo "$REPO" \
+            --title "Valo Optimise v${VERSION}" \
+            --notes "$NOTES" \
+            --latest
