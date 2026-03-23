@@ -44,7 +44,7 @@ jobs:
         with:
           tag_name: v${{ steps.version.outputs.version }}
           name: "Valo Optimise v${{ steps.version.outputs.version }}"
-          repository: harveyjenkins03-coder/valo-optimise-releases-public
+          repository: harveyjenkins03-coder/valo-optimise
           token: ${{ secrets.RELEASE_PAT }}
           body: |
             ## Valo Optimise v${{ steps.version.outputs.version }}
