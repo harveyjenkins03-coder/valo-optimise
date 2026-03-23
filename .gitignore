@@ -40,7 +40,7 @@ agent_config.json
 licence.json
 
 # PyInstaller
-*.spec
+# *.spec — spec is needed for CI build
 *.exe
 
 # Workspace (separate repo — not part of this product)
