@@ -3519,7 +3519,8 @@ class App(ctk.CTk):
         self.minsize(960, 650)
         self.configure(fg_color=BG)
         self._frames: dict = {}
-        self._active_key = None
+        self._active_key   = None
+        self._active_frame = None
         self._build()
         fade_in_window(self, duration_ms=280)   # smooth entrance
         self.protocol("WM_DELETE_WINDOW", self._on_close)
@@ -3656,11 +3657,10 @@ class App(ctk.CTk):
                       height=26, corner_radius=6
                       ).grid(row=3, column=0, sticky="ew", pady=(6, 0))
 
-        # Content area
+        # Content area — uses pack internally so only the active frame
+        # participates in layout (eliminates resize lag from hidden frames)
         content = ctk.CTkFrame(self, fg_color=BG, corner_radius=0)
         content.grid(row=0, column=1, sticky="nsew")
-        content.grid_columnconfigure(0, weight=1)
-        content.grid_rowconfigure(0, weight=1)
         self._content = content
 
         # Lazy frame registry — frames are built on first visit
@@ -3686,7 +3686,6 @@ class App(ctk.CTk):
 
         # Only build Dashboard eagerly — everything else is built on first visit
         dash = DashboardFrame(content, self.cfg)
-        dash.grid(row=0, column=0, sticky="nsew")
         dash.set_app(self)
         self._frames["dashboard"] = dash
 
@@ -3705,8 +3704,8 @@ class App(ctk.CTk):
             self._show_upgrade_prompt(key)
             return
 
-        # Deactivate previous indicator
-        if self._active_key:
+        # ── Update nav indicators immediately ─────────────────────────────────
+        if self._active_key and self._active_key != key:
             prev_ind = self._nav_indicators.get(self._active_key)
             prev_btn = self._nav_btns.get(self._active_key)
             if prev_ind:
@@ -3715,7 +3714,6 @@ class App(ctk.CTk):
                 prev_btn.configure(fg_color="transparent", text_color=MUTED,
                                    font=("Arial", 11))
 
-        # Activate new indicator
         self._active_key = key
         new_ind = self._nav_indicators.get(key)
         new_btn = self._nav_btns.get(key)
@@ -3725,17 +3723,24 @@ class App(ctk.CTk):
             new_btn.configure(fg_color=SIDEBAR_ACT, text_color=TEXT,
                                font=("Arial", 11, "bold"))
 
-        # Lazy-build frame on first visit
+        # Flush nav update so the button responds before we build the frame
+        self.update_idletasks()
+
+        # ── Hide the current frame (removes it from layout entirely) ──────────
+        if self._active_frame is not None:
+            self._active_frame.pack_forget()
+            self._active_frame = None
+
+        # ── Lazy-build frame on first visit ───────────────────────────────────
         if key not in self._frames:
             cls = self._frame_classes[key]
             frame = cls(self._content, self.cfg)
-            frame.grid(row=0, column=0, sticky="nsew")
             self._frames[key] = frame
 
-        # Lower previous, raise new — no full loop needed
-        if self._active_key and self._active_key in self._frames:
-            self._frames[self._active_key].lower()
-        self._frames[key].tkraise()
+        # ── Show new frame (only this frame now participates in layout) ───────
+        frame = self._frames[key]
+        frame.pack(fill="both", expand=True)
+        self._active_frame = frame
 
     # ── Licence dialogs ───────────────────────────────────────────────────────
 
