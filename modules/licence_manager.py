@@ -34,8 +34,8 @@ import urllib.error
 
 # ── Gumroad product IDs ── (set these after creating products on gumroad.com)
 # Each product has a unique permalink — find it in Product > Edit > Permalink
-_GUMROAD_PRO_ID      = "valooptimise-pro"       # replace after Gumroad setup
-_GUMROAD_LIFETIME_ID = "valooptimise-lifetime"   # replace after Gumroad setup
+_GUMROAD_PRO_ID      = "uriyw"
+_GUMROAD_LIFETIME_ID = "tsqtaq"
 _GUMROAD_VERIFY_URL  = "https://api.gumroad.com/v2/licenses/verify"
 
 # Cache validation result for 24 hours so we don't hit the API every launch
