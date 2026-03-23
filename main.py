@@ -3351,24 +3351,22 @@ class DashboardFrame(ctk.CTkFrame):
     # ── Live stats ticker ─────────────────────────────────────────────────────
 
     def _tick_stats(self):
-        """Update CPU/RAM/process labels. Slows to 5 s when frame is not visible."""
+        """Update CPU/RAM labels. Slows to 8 s when frame is not visible."""
         try:
             if self.winfo_exists():
                 visible = self.winfo_ismapped()
-                cpu  = _psutil.cpu_percent(interval=None)
-                mem  = _psutil.virtual_memory()
-                procs = len(_psutil.pids())
+                cpu     = _psutil.cpu_percent(interval=None)
+                mem     = _psutil.virtual_memory()
                 free_gb = mem.available / (1024 ** 3)
-                cpu_color  = RED_LIGHT if cpu > 80 else (GOLD if cpu > 50 else ACCENT2)
-                ram_color  = RED_LIGHT if free_gb < 1.0 else (GOLD if free_gb < 2.0 else ACCENT2)
+                cpu_color = RED_LIGHT if cpu > 80 else (GOLD if cpu > 50 else ACCENT2)
+                ram_color = RED_LIGHT if free_gb < 1.0 else (GOLD if free_gb < 2.0 else ACCENT2)
                 self._lbl_cpu.configure(text=f"{cpu:.0f}%", text_color=cpu_color)
                 self._lbl_ram.configure(text=f"{free_gb:.1f} GB", text_color=ram_color)
-                self._lbl_proc.configure(text=str(procs), text_color=ACCENT2)
-                interval = 2000 if visible else 5000
+                interval = 3000 if visible else 8000
             else:
                 return
         except Exception:
-            interval = 5000
+            interval = 8000
         self._tick_id = self.after(interval, self._tick_stats)
 
     # ── Step animation helpers ────────────────────────────────────────────────
@@ -3665,8 +3663,8 @@ class App(ctk.CTk):
         content.grid_rowconfigure(0, weight=1)
         self._content = content
 
-        # Instantiate frames
-        frame_classes = {
+        # Lazy frame registry — frames are built on first visit
+        self._frame_classes = {
             "dashboard":   DashboardFrame,
             "system":      SystemFrame,
             "network":     NetworkFrame,
@@ -3685,13 +3683,12 @@ class App(ctk.CTk):
             "stats":       StatsFrame,
             "guide":       GuideFrame,
         }
-        for key, cls in frame_classes.items():
-            frame = cls(content, self.cfg)
-            frame.grid(row=0, column=0, sticky="nsew")
-            self._frames[key] = frame
 
-        # Give DashboardFrame a reference to the App for navigation
-        self._frames["dashboard"].set_app(self)
+        # Only build Dashboard eagerly — everything else is built on first visit
+        dash = DashboardFrame(content, self.cfg)
+        dash.grid(row=0, column=0, sticky="nsew")
+        dash.set_app(self)
+        self._frames["dashboard"] = dash
 
         self._show_frame("dashboard")
 
@@ -3728,12 +3725,17 @@ class App(ctk.CTk):
             new_btn.configure(fg_color=SIDEBAR_ACT, text_color=TEXT,
                                font=("Arial", 11, "bold"))
 
-        # Raise the target frame
-        for k, frame in self._frames.items():
-            if k == key:
-                frame.tkraise()
-            else:
-                frame.lower()
+        # Lazy-build frame on first visit
+        if key not in self._frames:
+            cls = self._frame_classes[key]
+            frame = cls(self._content, self.cfg)
+            frame.grid(row=0, column=0, sticky="nsew")
+            self._frames[key] = frame
+
+        # Lower previous, raise new — no full loop needed
+        if self._active_key and self._active_key in self._frames:
+            self._frames[self._active_key].lower()
+        self._frames[key].tkraise()
 
     # ── Licence dialogs ───────────────────────────────────────────────────────
 
