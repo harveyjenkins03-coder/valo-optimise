@@ -3757,7 +3757,7 @@ class App(ctk.CTk):
 
         def _open_buy():
             import webbrowser
-            webbrowser.open("https://valooptimise.harveyjenkins03.workers.dev/#pricing")
+            webbrowser.open("https://harveyj82.gumroad.com/l/uriyw")
             dlg.destroy()
 
         ctk.CTkButton(dlg, text="⭐ Get Pro — £4.99/mo", command=_open_buy,
@@ -3828,7 +3828,7 @@ class App(ctk.CTk):
 
             def _open_buy():
                 import webbrowser
-                webbrowser.open("https://valooptimise.harveyjenkins03.workers.dev/#pricing")
+                webbrowser.open("https://harveyj82.gumroad.com/l/uriyw")
             ctk.CTkButton(dlg, text="⭐ Buy Pro — £4.99/mo", command=_open_buy,
                           fg_color=ACCENT, hover_color="#e63946", text_color=TEXT,
                           font=("Arial", 11, "bold"), height=34, width=340).pack()
