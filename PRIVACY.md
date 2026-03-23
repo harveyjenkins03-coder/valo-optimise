@@ -94,6 +94,8 @@ platform.
 ## Contact
 
 If you have questions about this privacy policy, please contact the owners via the
-GitHub repository: github.com/harveyjenkins03-coder/valo-optimise
+GitHub repository: github.com/harveyjenkins03-coder/valo-optimise-src
+
+See also: [Terms of Service](TERMS.md) · [Disclaimer](DISCLAIMER.md)
 
 © 2026 Harvey Jenkins & Tobias Sanders. All Rights Reserved.
