@@ -55,6 +55,7 @@ from modules.mouse_driver import (
     SensitivityProfileManager, MouseDeviceInfo, RawInputChecker,
 )
 from modules.benchmark import SystemBenchmark, METRIC_ORDER
+from modules.fps_card   import generate_card
 from modules import licence_manager as _lic
 
 # ── Colors ───────────────────────────────────────────────────────────────────
@@ -1277,7 +1278,9 @@ class BenchmarkFrame(ctk.CTkFrame):
         self._scan_btn = accent_button(btn_col, "🔍  Scan Now", self._start_scan, width=150)
         self._scan_btn.pack(pady=(0, 6))
         ghost_button(btn_col, "💾  Save Snapshot", self._save_snapshot, width=150).pack(pady=(0, 6))
-        ghost_button(btn_col, "✕  Clear Snapshot", self._clear_snapshot, width=150).pack()
+        ghost_button(btn_col, "✕  Clear Snapshot", self._clear_snapshot, width=150).pack(pady=(0, 6))
+        self._export_btn = ghost_button(btn_col, "📤  Export Card", self._export_card, width=150)
+        self._export_btn.pack()
 
         # ── Column headers ──
         hdr = ctk.CTkFrame(self, fg_color="transparent")
@@ -1494,6 +1497,40 @@ class BenchmarkFrame(ctk.CTkFrame):
         self._bm.delete_snapshot()
         if self._current_metrics:
             self._apply_results(self._current_metrics)
+
+    def _export_card(self):
+        """Generate a shareable before/after PNG card and open it."""
+        if not self._current_metrics:
+            _win_toast("Valo Optimise", "Run a scan first before exporting a card.")
+            return
+        snap = self._bm.load_snapshot()
+        if not snap:
+            _win_toast("Valo Optimise",
+                       "Save a snapshot before optimising, then scan again to show improvement.")
+            return
+
+        self._export_btn.configure(state="disabled", text="Generating...")
+
+        def _do():
+            before_score   = snap.get("score", 0)
+            before_metrics = snap.get("metrics", {})
+            return generate_card(
+                before_score   = before_score,
+                after_score    = self._current_score,
+                before_metrics = before_metrics,
+                after_metrics  = {k: {"value": v["value"], "passed": v["passed"]}
+                                  for k, v in self._current_metrics.items()},
+            )
+
+        def _done(path):
+            self._export_btn.configure(state="normal", text="📤  Export Card")
+            _win_toast("Valo Optimise", f"Card saved to Desktop — {path.split(chr(92))[-1]}")
+            try:
+                os.startfile(path)
+            except Exception:
+                pass
+
+        run_in_thread(_do, lambda p: self.after(0, lambda: _done(p)))
 
 
 # ══════════════════════════════════════════════════════════════════════════════
