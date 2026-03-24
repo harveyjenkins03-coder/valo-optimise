@@ -195,71 +195,167 @@
     /* ── FPS WIDGET ── */
     .hero-fps {
       display: inline-flex;
-      align-items: flex-end;
-      gap: 16px;
-      background: rgba(17,24,39,0.75);
+      align-items: stretch;
+      gap: 0;
+      background: rgba(17,24,39,0.88);
       border: 1px solid var(--border);
-      border-radius: 16px;
-      padding: 18px 28px;
-      margin-bottom: 28px;
-      backdrop-filter: blur(10px);
+      border-radius: 18px;
+      padding: 22px 32px;
+      margin-bottom: 32px;
+      backdrop-filter: blur(14px);
       animation: fadeInUp 0.65s ease 0.38s both;
+      position: relative;
+      overflow: hidden;
     }
-    .fps-col {
+    .hero-fps::before {
+      content: '';
+      position: absolute; inset: 0;
+      background: radial-gradient(ellipse 80% 60% at 70% 50%, rgba(0,212,170,0.04) 0%, transparent 70%);
+      pointer-events: none;
+    }
+    .fps-metric {
       display: flex;
       flex-direction: column;
       align-items: center;
-      gap: 4px;
-      min-width: 72px;
+      gap: 6px;
+      padding: 0 28px;
     }
-    .fps-tag {
-      font-size: 0.65rem;
-      font-weight: 700;
+    .fps-metric:first-child { padding-left: 0; }
+    .fps-metric:last-child  { padding-right: 0; }
+    .fps-metric-label {
+      font-size: 0.62rem;
+      font-weight: 800;
       text-transform: uppercase;
-      letter-spacing: 1.2px;
+      letter-spacing: 1.8px;
       color: var(--muted);
+      margin-bottom: 2px;
     }
-    .fps-bars {
-      height: 72px;
+    .fps-bars-group {
       display: flex;
       align-items: flex-end;
-      justify-content: center;
+      gap: 10px;
     }
-    .fps-bar {
-      width: 28px;
-      border-radius: 3px 3px 0 0;
-      animation: barGrow 0.9s cubic-bezier(.22,1,.36,1) forwards;
-      height: 0;
+    .fps-column {
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      gap: 5px;
+      min-width: 52px;
     }
-    .fps-bar.before {
-      background: #3a4e66;
-      --target-h: 28px;
-      animation-delay: 0.9s;
-    }
-    .fps-bar.after {
-      background: linear-gradient(180deg, #00d4aa, #009973);
-      --target-h: 68px;
-      animation-delay: 1.2s;
-    }
-    .fps-val {
-      font-size: 1.5rem;
-      font-weight: 900;
-      line-height: 1;
-    }
-    .fps-val.before { color: var(--muted); }
-    .fps-val.after  { color: var(--accent2); }
-    .fps-unit {
-      font-size: 0.65rem;
+    .fps-col-tag {
+      font-size: 0.58rem;
+      font-weight: 700;
+      text-transform: uppercase;
+      letter-spacing: 1px;
       color: var(--muted);
     }
-    .fps-divider {
-      align-self: center;
-      padding-bottom: 20px;
-      font-size: 1.2rem;
+    .fps-bar-track {
+      width: 38px;
+      height: 90px;
+      background: rgba(255,255,255,0.02);
+      border: 1px solid rgba(255,255,255,0.05);
+      border-radius: 4px 4px 0 0;
+      display: flex;
+      align-items: flex-end;
+      overflow: hidden;
+      position: relative;
+    }
+    .fps-bar-track::before {
+      content: '';
+      position: absolute; inset: 0;
+      background: repeating-linear-gradient(
+        to bottom,
+        transparent, transparent calc(25% - 1px),
+        rgba(255,255,255,0.04) calc(25% - 1px), rgba(255,255,255,0.04) 25%
+      );
+      pointer-events: none;
+    }
+    .fps-bar-fill {
+      width: 100%;
+      border-radius: 3px 3px 0 0;
+      height: 0;
+    }
+    .fps-bar-fill.before-fps {
+      background: linear-gradient(180deg, #4a5e7a, #2a3e56);
+      animation: barGrow 0.9s cubic-bezier(.22,1,.36,1) 0.9s forwards;
+      --target-h: 30px;
+    }
+    .fps-bar-fill.after-fps {
+      background: linear-gradient(180deg, #00eec4, #00d4aa, #009973);
+      box-shadow: 0 0 18px rgba(0,212,170,0.6), 0 0 40px rgba(0,212,170,0.2);
+      animation: barGrow 1s cubic-bezier(.22,1,.36,1) 1.2s forwards;
+      --target-h: 88px;
+    }
+    .fps-bar-fill.before-ping {
+      background: linear-gradient(180deg, #4a5e7a, #2a3e56);
+      animation: barGrow 0.9s cubic-bezier(.22,1,.36,1) 0.9s forwards;
+      --target-h: 58px;
+    }
+    .fps-bar-fill.after-ping {
+      background: linear-gradient(180deg, #ff7a87, #ff4655, #cc2233);
+      box-shadow: 0 0 18px rgba(255,70,85,0.6), 0 0 40px rgba(255,70,85,0.2);
+      animation: barGrow 1s cubic-bezier(.22,1,.36,1) 1.2s forwards;
+      --target-h: 14px;
+    }
+    .fps-number {
+      font-size: 1.7rem;
+      font-weight: 900;
+      line-height: 1;
+      font-variant-numeric: tabular-nums;
+      min-width: 3ch;
+      text-align: center;
+    }
+    .fps-number.before-fps-num,
+    .fps-number.before-ping-num { color: var(--muted); }
+    .fps-number.after-fps-num   { color: var(--accent2); }
+    .fps-number.after-ping-num  { color: var(--accent); }
+    .fps-unit {
+      font-size: 0.58rem;
       font-weight: 700;
-      color: var(--accent);
+      text-transform: uppercase;
+      letter-spacing: 1px;
+      color: var(--muted);
+    }
+    .fps-gain-badge {
+      font-size: 0.7rem;
+      font-weight: 800;
+      color: var(--accent2);
+      background: rgba(0,212,170,0.1);
+      border: 1px solid rgba(0,212,170,0.3);
+      border-radius: 20px;
+      padding: 3px 10px;
       opacity: 0;
-      animation: fadeIn 0.4s ease 1.5s forwards;
+      animation: fadeIn 0.5s ease 2.3s forwards;
+      margin-top: 2px;
+    }
+    .fps-gain-badge.ping-badge {
+      color: var(--accent);
+      background: rgba(255,70,85,0.1);
+      border-color: rgba(255,70,85,0.3);
+    }
+    .fps-separator {
+      width: 1px;
+      background: var(--border);
+      align-self: stretch;
+      margin: 0 4px;
+    }
+    .fps-live-row {
+      display: flex;
+      align-items: center;
+      gap: 4px;
+      font-size: 0.55rem;
+      font-weight: 700;
+      text-transform: uppercase;
+      letter-spacing: 1px;
+      color: var(--accent2);
+      opacity: 0;
+      animation: fadeIn 0.4s ease 2.6s forwards;
+    }
+    .fps-live-dot {
+      width: 5px; height: 5px;
+      border-radius: 50%;
+      background: var(--accent2);
+      animation: livePulse 1.4s ease-in-out infinite;
     }
 
     /* ── STATS STRIP ── */
@@ -489,18 +585,48 @@
     <h1>Boost Your <em>Valorant FPS</em><br>in Under 60 Seconds</h1>
 
     <div class="hero-fps">
-      <div class="fps-col">
-        <div class="fps-tag">Before</div>
-        <div class="fps-bars"><div class="fps-bar before"></div></div>
-        <div class="fps-val before">62</div>
-        <div class="fps-unit">FPS</div>
+      <!-- FPS -->
+      <div class="fps-metric">
+        <div class="fps-metric-label">Frames Per Second</div>
+        <div class="fps-bars-group">
+          <div class="fps-column">
+            <div class="fps-col-tag">Before</div>
+            <div class="fps-bar-track"><div class="fps-bar-fill before-fps"></div></div>
+            <div class="fps-number before-fps-num">0</div>
+            <div class="fps-unit">FPS</div>
+          </div>
+          <div class="fps-column">
+            <div class="fps-col-tag">After</div>
+            <div class="fps-bar-track"><div class="fps-bar-fill after-fps"></div></div>
+            <div class="fps-number after-fps-num">0</div>
+            <div class="fps-unit">FPS</div>
+          </div>
+        </div>
+        <div class="fps-gain-badge">+132% FPS ↑</div>
+        <div class="fps-live-row"><span class="fps-live-dot"></span>Live</div>
       </div>
-      <div class="fps-divider">→</div>
-      <div class="fps-col">
-        <div class="fps-tag">After</div>
-        <div class="fps-bars"><div class="fps-bar after"></div></div>
-        <div class="fps-val after">144</div>
-        <div class="fps-unit">FPS</div>
+
+      <div class="fps-separator"></div>
+
+      <!-- Ping -->
+      <div class="fps-metric">
+        <div class="fps-metric-label">Ping</div>
+        <div class="fps-bars-group">
+          <div class="fps-column">
+            <div class="fps-col-tag">Before</div>
+            <div class="fps-bar-track"><div class="fps-bar-fill before-ping"></div></div>
+            <div class="fps-number before-ping-num">0</div>
+            <div class="fps-unit">MS</div>
+          </div>
+          <div class="fps-column">
+            <div class="fps-col-tag">After</div>
+            <div class="fps-bar-track"><div class="fps-bar-fill after-ping"></div></div>
+            <div class="fps-number after-ping-num">0</div>
+            <div class="fps-unit">MS</div>
+          </div>
+        </div>
+        <div class="fps-gain-badge ping-badge">-74% Ping ↓</div>
+        <div class="fps-live-row"><span class="fps-live-dot"></span>Live</div>
       </div>
     </div>
 
@@ -945,6 +1071,36 @@
   }, { threshold: 0.5 });
 
   document.querySelectorAll('.stat-val[data-target]').forEach(el => statObserver.observe(el));
+
+  // ── FPS widget count-up + live fluctuation ───────────────────────────────
+  function countUpFps(el, target, duration, delayMs, onDone) {
+    setTimeout(() => {
+      const start = performance.now();
+      (function step(now) {
+        const p = Math.min((now - start) / duration, 1);
+        const ease = 1 - Math.pow(1 - p, 3);
+        el.textContent = Math.round(ease * target);
+        if (p < 1) requestAnimationFrame(step);
+        else if (onDone) onDone();
+      })(performance.now());
+    }, delayMs);
+  }
+
+  function fluctuate(el, base, range, intervalMs) {
+    setInterval(() => {
+      el.textContent = base + Math.round((Math.random() - 0.5) * range * 2);
+    }, intervalMs);
+  }
+
+  const bFps  = document.querySelector('.before-fps-num');
+  const aFps  = document.querySelector('.after-fps-num');
+  const bPing = document.querySelector('.before-ping-num');
+  const aPing = document.querySelector('.after-ping-num');
+
+  if (bFps)  countUpFps(bFps,  62, 800, 900);
+  if (aFps)  countUpFps(aFps, 144, 950, 1200, () => fluctuate(aFps,  144, 4, 1800));
+  if (bPing) countUpFps(bPing, 47, 800, 900);
+  if (aPing) countUpFps(aPing, 12, 950, 1200, () => fluctuate(aPing,  12, 2, 2200));
   </script>
 </body>
 </html>
