@@ -43,6 +43,19 @@ _CACHE_HOURS = 24
 
 _CFG_DIR  = pathlib.Path.home() / ".valooptimise"
 _LIC_FILE = _CFG_DIR / "licence.json"
+_DEV_FILE = _CFG_DIR / "dev.key"
+
+# Hash of the developer key — secret never stored in code, only its sha256
+_DEV_HASH = "29aa73ac9f6e92a1eed784eeb2db207f422f26f7e09efa242c613e41c0b15b54"
+
+
+def _is_dev() -> bool:
+    """Returns True if a valid developer key is present locally. Never committed."""
+    try:
+        key = _DEV_FILE.read_text(encoding="utf-8").strip()
+        return hashlib.sha256(key.encode()).hexdigest() == _DEV_HASH
+    except Exception:
+        return False
 
 # ── Pro tabs that require a paid licence ──────────────────────────────────────
 PRO_TABS = {
@@ -134,8 +147,11 @@ def _verify_gumroad(key: str, product_id: str) -> tuple[bool, str, str]:
 def get_tier() -> str:
     """
     Returns current licence tier: 'free', 'pro', or 'lifetime'.
+    Developer key (~/.valooptimise/dev.key) grants lifetime silently.
     Uses cached result if still valid — no network call needed most launches.
     """
+    if _is_dev():
+        return "lifetime"
     data = _load()
     if not data.get("key"):
         return "free"
