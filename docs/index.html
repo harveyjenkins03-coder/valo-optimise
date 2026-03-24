@@ -850,57 +850,59 @@
     let W, H, particles = [], animId;
 
     function resize() {
-      W = canvas.width  = canvas.offsetWidth;
-      H = canvas.height = canvas.offsetHeight;
+      const hero = canvas.parentElement;
+      W = canvas.width  = hero.offsetWidth;
+      H = canvas.height = hero.offsetHeight;
     }
 
     function Particle() {
-      this.x = Math.random() * W;
-      this.y = Math.random() * H;
-      this.vx = (Math.random() - 0.5) * 0.35;
-      this.vy = (Math.random() - 0.5) * 0.35;
-      this.r  = Math.random() * 1.5 + 0.5;
-      this.alpha = Math.random() * 0.4 + 0.1;
+      this.x     = Math.random() * W;
+      this.y     = Math.random() * H;
+      this.vx    = (Math.random() - 0.5) * 0.5;
+      this.vy    = (Math.random() - 0.5) * 0.5;
+      this.r     = Math.random() * 2 + 0.6;
+      this.alpha = Math.random() * 0.5 + 0.15;
     }
 
     function init() {
       resize();
-      particles = Array.from({ length: 90 }, () => new Particle());
+      const count = Math.max(Math.floor((W * H) / 7000), 140);
+      particles = Array.from({ length: count }, () => new Particle());
     }
 
     function draw() {
       ctx.clearRect(0, 0, W, H);
-      // Lines
-      for (let i = 0; i < particles.length; i++) {
-        for (let j = i + 1; j < particles.length; j++) {
+      const len = particles.length;
+      for (let i = 0; i < len; i++) {
+        for (let j = i + 1; j < len; j++) {
           const dx = particles[i].x - particles[j].x;
           const dy = particles[i].y - particles[j].y;
           const dist = Math.sqrt(dx * dx + dy * dy);
-          if (dist < 130) {
+          if (dist < 160) {
             ctx.beginPath();
-            ctx.strokeStyle = `rgba(255,70,85,${0.06 * (1 - dist / 130)})`;
-            ctx.lineWidth = 0.5;
+            ctx.strokeStyle = `rgba(255,70,85,${0.14 * (1 - dist / 160)})`;
+            ctx.lineWidth = 0.6;
             ctx.moveTo(particles[i].x, particles[i].y);
             ctx.lineTo(particles[j].x, particles[j].y);
             ctx.stroke();
           }
         }
       }
-      // Dots
-      particles.forEach(p => {
-        p.x += p.vx; p.y += p.vy;
+      for (let i = 0; i < len; i++) {
+        const p = particles[i];
+        p.x += p.vx;
+        p.y += p.vy;
         if (p.x < 0 || p.x > W) p.vx *= -1;
         if (p.y < 0 || p.y > H) p.vy *= -1;
         ctx.beginPath();
         ctx.arc(p.x, p.y, p.r, 0, Math.PI * 2);
         ctx.fillStyle = `rgba(255,70,85,${p.alpha})`;
         ctx.fill();
-      });
+      }
       animId = requestAnimationFrame(draw);
     }
 
-    init();
-    draw();
+    window.addEventListener('load', () => { init(); draw(); });
     window.addEventListener('resize', () => { cancelAnimationFrame(animId); init(); draw(); });
   })();
 
