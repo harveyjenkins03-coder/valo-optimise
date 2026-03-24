@@ -1,0 +1,313 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Membership Terms — Valo Optimise</title>
+  <meta name="description" content="Ko-fi membership and supporter tier terms for Valo Optimise. All tiers, refund policy, and licence conditions." />
+  <link rel="canonical" href="https://valooptimise.com/terms" />
+  <style>
+    :root {
+      --bg:      #0a0e1a;
+      --panel:   #111827;
+      --panel2:  #1c2a3a;
+      --accent:  #ff4655;
+      --accent2: #00d4aa;
+      --gold:    #ffd700;
+      --text:    #f0f4ff;
+      --muted:   #6b7a99;
+      --border:  #1e2d42;
+    }
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+    html { scroll-behavior: smooth; }
+    body {
+      font-family: 'Segoe UI', system-ui, -apple-system, sans-serif;
+      background: var(--bg);
+      color: var(--text);
+      line-height: 1.7;
+    }
+    a { color: var(--accent2); text-decoration: none; }
+    a:hover { text-decoration: underline; }
+
+    /* NAV */
+    nav {
+      position: fixed; top: 0; left: 0; right: 0; z-index: 100;
+      display: flex; align-items: center; justify-content: space-between;
+      padding: 0 5vw;
+      height: 56px;
+      background: rgba(10,14,26,0.92);
+      backdrop-filter: blur(12px);
+      border-bottom: 1px solid var(--border);
+    }
+    .nav-logo { font-weight: 800; font-size: 1.1rem; color: var(--text); letter-spacing: 0.5px; text-decoration: none; }
+    .nav-logo span { color: var(--accent); }
+    .nav-links { display: flex; gap: 24px; font-size: 0.85rem; }
+    .nav-links a { color: var(--muted); transition: color 0.15s; }
+    .nav-links a:hover { color: var(--text); text-decoration: none; }
+
+    /* CONTENT */
+    .container {
+      max-width: 760px;
+      margin: 0 auto;
+      padding: 100px 24px 80px;
+    }
+    .page-header {
+      margin-bottom: 48px;
+      padding-bottom: 24px;
+      border-bottom: 1px solid var(--border);
+    }
+    .page-header .badge {
+      display: inline-block;
+      background: rgba(255,70,85,0.1);
+      border: 1px solid rgba(255,70,85,0.25);
+      border-radius: 20px;
+      padding: 3px 12px;
+      font-size: 0.72rem;
+      font-weight: 700;
+      color: var(--accent);
+      letter-spacing: 0.8px;
+      text-transform: uppercase;
+      margin-bottom: 16px;
+    }
+    .page-header h1 {
+      font-size: 2.2rem;
+      font-weight: 900;
+      letter-spacing: -0.5px;
+      margin-bottom: 10px;
+    }
+    .page-header .meta {
+      font-size: 0.85rem;
+      color: var(--muted);
+    }
+
+    h2 {
+      font-size: 1.1rem;
+      font-weight: 700;
+      color: var(--text);
+      margin: 36px 0 12px;
+      padding-bottom: 8px;
+      border-bottom: 1px solid var(--border);
+    }
+    h3 {
+      font-size: 1rem;
+      font-weight: 700;
+      color: var(--accent2);
+      margin: 24px 0 8px;
+    }
+    p { margin-bottom: 14px; color: #c8d0e0; font-size: 0.95rem; }
+    ul { margin: 0 0 14px 20px; }
+    ul li { color: #c8d0e0; font-size: 0.95rem; margin-bottom: 6px; }
+
+    table {
+      width: 100%;
+      border-collapse: collapse;
+      margin-bottom: 20px;
+      font-size: 0.88rem;
+    }
+    th {
+      background: var(--panel2);
+      color: var(--muted);
+      font-weight: 600;
+      text-align: left;
+      padding: 10px 14px;
+      border: 1px solid var(--border);
+    }
+    td {
+      padding: 10px 14px;
+      border: 1px solid var(--border);
+      color: #c8d0e0;
+      background: var(--panel);
+    }
+
+    .highlight-box {
+      background: rgba(0,212,170,0.06);
+      border: 1px solid rgba(0,212,170,0.2);
+      border-radius: 8px;
+      padding: 16px 20px;
+      margin-bottom: 20px;
+      font-size: 0.92rem;
+      color: var(--accent2);
+    }
+
+    .tier-card {
+      background: var(--panel);
+      border: 1px solid var(--border);
+      border-radius: 10px;
+      padding: 24px;
+      margin-bottom: 20px;
+    }
+    .tier-card.featured {
+      border-color: var(--accent);
+    }
+    .tier-card .tier-price {
+      font-size: 1.6rem;
+      font-weight: 900;
+      color: var(--accent);
+      margin-bottom: 4px;
+    }
+    .tier-card.gold .tier-price { color: var(--gold); }
+    .tier-card .tier-name {
+      font-size: 0.8rem;
+      font-weight: 700;
+      color: var(--muted);
+      text-transform: uppercase;
+      letter-spacing: 0.8px;
+      margin-bottom: 16px;
+    }
+    .tier-card ul li { margin-bottom: 8px; }
+    .tier-card .tier-note {
+      margin-top: 16px;
+      padding-top: 14px;
+      border-top: 1px solid var(--border);
+      font-size: 0.82rem;
+      color: var(--muted);
+    }
+
+    /* FOOTER */
+    footer {
+      text-align: center;
+      padding: 32px 24px;
+      border-top: 1px solid var(--border);
+      color: var(--muted);
+      font-size: 0.8rem;
+    }
+    footer a { color: var(--muted); }
+    footer a:hover { color: var(--text); }
+  </style>
+</head>
+<body>
+
+  <nav>
+    <a href="/" class="nav-logo"><span>Valo</span> Optimise</a>
+    <div class="nav-links">
+      <a href="/">Home</a>
+      <a href="/#pricing">Pricing</a>
+      <a href="https://ko-fi.com/valooptimise" target="_blank" rel="noopener">Ko-fi</a>
+      <a href="https://github.com/harveyjenkins03-coder/valo-optimise/releases/latest">Download</a>
+    </div>
+  </nav>
+
+  <div class="container">
+
+    <div class="page-header">
+      <div class="badge">Legal</div>
+      <h1>Membership Terms</h1>
+      <div class="meta">Last updated: 24 March 2026 &nbsp;·&nbsp; Issued by: Harvey Jenkins &amp; Tobias Sanders trading as Valo Optimise LLP</div>
+    </div>
+
+    <div class="highlight-box">
+      These terms apply to all Ko-fi supporter tiers for Valo Optimise. By donating and claiming a reward you agree to the conditions below.
+    </div>
+
+    <!-- TIER SUMMARY -->
+    <h2>Supporter Tiers at a Glance</h2>
+    <table>
+      <tr>
+        <th>Tier</th>
+        <th>Price</th>
+        <th>What You Get</th>
+      </tr>
+      <tr>
+        <td>Beta Supporter</td>
+        <td>£3</td>
+        <td>Name in app credits at v1.0 launch</td>
+      </tr>
+      <tr>
+        <td>Lifetime Pro Access</td>
+        <td>£49</td>
+        <td>All Pro features unlocked forever — beta price (full price £69.99 at launch)</td>
+      </tr>
+      <tr>
+        <td>Founding Member</td>
+        <td>£99</td>
+        <td>Lifetime Pro + permanent Founding Member credit on website &amp; in-app</td>
+      </tr>
+    </table>
+
+    <!-- TIER DETAIL CARDS -->
+    <h2>Tier Details</h2>
+
+    <div class="tier-card">
+      <div class="tier-price">£3</div>
+      <div class="tier-name">Beta Supporter</div>
+      <ul>
+        <li>Your first name or chosen display name listed in the in-app credits at v1.0 launch</li>
+        <li>Credits are permanent and will not be removed from subsequent versions without your consent</li>
+        <li>To submit your display name, email <a href="mailto:hello@valooptimise.com">hello@valooptimise.com</a> with your Ko-fi transaction reference</li>
+        <li>This tier does not include Pro software access</li>
+      </ul>
+      <div class="tier-note">Credit listing is a goodwill acknowledgement and does not constitute employment, partnership, or any financial interest in Valo Optimise LLP.</div>
+    </div>
+
+    <div class="tier-card featured">
+      <div class="tier-price">£49</div>
+      <div class="tier-name">⭐ Lifetime Pro Access — Beta Price</div>
+      <ul>
+        <li>One (1) lifetime Pro licence issued to a single named individual</li>
+        <li>Unlocks all Pro features: GPU optimiser, CPU timer, Valorant config editor, audio optimiser, stats tracker, and all future Pro additions</li>
+        <li><strong>£49 is the beta supporter price.</strong> The full retail lifetime price is £69.99 on our website. Supporting on Ko-fi locks in the discounted rate permanently</li>
+        <li>Licences are non-transferable — they may not be resold, gifted, or shared</li>
+        <li>"Lifetime" means the lifetime of the Valo Optimise product. In the event the product is discontinued, no further obligation to the licence holder exists beyond that point</li>
+        <li>Licence delivery within <strong>24 hours</strong> of donation — email <a href="mailto:hello@valooptimise.com">hello@valooptimise.com</a> with your Ko-fi reference and preferred email address</li>
+        <li>Licences are issued via Gumroad. By accepting a licence you also agree to Gumroad's end user terms</li>
+      </ul>
+      <div class="tier-note">Does not include app credits unless combined with a separate £3 Beta Supporter donation.</div>
+    </div>
+
+    <div class="tier-card gold">
+      <div class="tier-price">£99</div>
+      <div class="tier-name">Founding Member</div>
+      <ul>
+        <li>Includes everything in the <strong>£49 Lifetime Pro Access</strong> tier</li>
+        <li>Your name permanently listed as a <strong>Founding Member</strong> on <a href="https://valooptimise.com">valooptimise.com</a> and within the app from v1.0 onwards</li>
+        <li>Founding Member status is permanent and will not be removed in any future version without your explicit written consent</li>
+        <li>To submit your display name, email <a href="mailto:hello@valooptimise.com">hello@valooptimise.com</a> with your Ko-fi reference</li>
+        <li>Display names are subject to review — names containing offensive or inappropriate content will not be published and a full refund will be offered</li>
+        <li>Limited to the first <strong>20 donors</strong> at this tier. Once capacity is reached this tier will be removed</li>
+      </ul>
+      <div class="tier-note">Founding Member status is a goodwill acknowledgement and does not constitute equity, ownership, partnership, employment, or any financial interest in Valo Optimise LLP.</div>
+    </div>
+
+    <!-- GENERAL TERMS -->
+    <h2>General Terms</h2>
+    <p>All donations are made voluntarily via Ko-fi. Ko-fi's own <a href="https://more.ko-fi.com/terms" target="_blank" rel="noopener">terms of service</a> apply to the payment transaction itself.</p>
+    <p>Rewards are fulfilled manually by the Valo Optimise team within <strong>24 hours</strong> of donation. To claim your reward, email <a href="mailto:hello@valooptimise.com">hello@valooptimise.com</a> with your Ko-fi transaction reference.</p>
+    <p>Valo Optimise is currently in <strong>public beta</strong>. Features, pricing, and availability are subject to change as we develop toward v1.0. We will honour all commitments made to existing tier donors regardless of future product changes.</p>
+
+    <!-- REFUND POLICY -->
+    <h2>Refund Policy</h2>
+    <p>Under the <strong>Consumer Rights Act 2015</strong> and <strong>Consumer Contracts Regulations 2013</strong>, you have the right to cancel within <strong>14 days</strong> of the transaction date, provided a digital reward has not been delivered or activated at your request.</p>
+    <p>Once a licence key or Pro access has been issued to you, the right to cancel the digital element is waived, consistent with Regulation 37 of the Consumer Contracts Regulations 2013 (digital content exemption). Refund of the Ko-fi donation remains subject to Ko-fi's own refund policy.</p>
+    <p>To request a refund before activation, contact us at <a href="mailto:hello@valooptimise.com">hello@valooptimise.com</a> within 14 days of your donation.</p>
+
+    <!-- LIMITATION OF LIABILITY -->
+    <h2>Limitation of Liability</h2>
+    <p>Valo Optimise is provided as-is during the public beta period. To the maximum extent permitted by UK law, Harvey Jenkins and Tobias Sanders shall not be liable for any indirect, incidental, or consequential loss arising from use of the software. Our total liability to any donor shall not exceed the amount donated.</p>
+
+    <!-- GOVERNING LAW -->
+    <h2>Governing Law</h2>
+    <p>These terms are governed by the <strong>laws of England and Wales</strong>. Any disputes shall be subject to the exclusive jurisdiction of the courts of England and Wales.</p>
+
+    <!-- CONTACT -->
+    <h2>Contact</h2>
+    <p>For any questions about these terms, rewards, refunds, or your licence:</p>
+    <ul>
+      <li>Email: <a href="mailto:hello@valooptimise.com">hello@valooptimise.com</a></li>
+      <li>Website: <a href="https://valooptimise.com">valooptimise.com</a></li>
+      <li>Ko-fi: <a href="https://ko-fi.com/valooptimise" target="_blank" rel="noopener">ko-fi.com/valooptimise</a></li>
+    </ul>
+
+  </div>
+
+  <footer>
+    <p>© 2026 Harvey Jenkins &amp; Tobias Sanders · Valo Optimise LLP · All Rights Reserved</p>
+    <p style="margin-top:8px;">
+      <a href="/">Home</a> &nbsp;·&nbsp;
+      <a href="/privacy.html">Privacy Policy</a> &nbsp;·&nbsp;
+      <a href="/terms.html">Membership Terms</a> &nbsp;·&nbsp;
+      <a href="https://ko-fi.com/valooptimise" target="_blank" rel="noopener">Ko-fi</a>
+    </p>
+  </footer>
+
+</body>
+</html>
