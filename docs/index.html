@@ -106,24 +106,34 @@
       border-radius: 20px; padding: 4px 14px;
       font-size: 0.75rem; font-weight: 700; color: var(--accent2);
       letter-spacing: 0.8px; text-transform: uppercase; margin-bottom: 24px;
+      animation: fadeInUp 0.6s ease 0.25s both;
     }
     .hero h1 {
       font-size: clamp(2.2rem, 6vw, 4rem);
       font-weight: 900; line-height: 1.1;
       letter-spacing: -1px; margin-bottom: 20px;
+      animation: fadeInUp 0.6s ease 0.4s both;
     }
     .hero h1 em { color: var(--accent); font-style: normal; }
     .hero-sub {
       font-size: clamp(1rem, 2vw, 1.25rem);
       color: var(--muted); max-width: 600px;
       margin: 0 auto 36px;
+      animation: fadeInUp 0.6s ease 0.55s both;
     }
-    .hero-btns { display: flex; gap: 14px; flex-wrap: wrap; justify-content: center; margin-bottom: 20px; }
+    .hero-btns { display: flex; gap: 14px; flex-wrap: wrap; justify-content: center; margin-bottom: 20px;
+      animation: fadeInUp 0.6s ease 0.68s both;
+    }
+    .hero-note { font-size: 0.78rem; color: var(--muted);
+      animation: fadeInUp 0.6s ease 0.1s both;
+    }
+    .hero-note span { color: var(--accent2); font-weight: 600; }
     .btn-primary {
       display: inline-flex; align-items: center; gap: 8px;
       background: var(--accent); color: #fff; border: none; border-radius: 8px;
       padding: 14px 30px; font-size: 1rem; font-weight: 700;
       cursor: pointer; letter-spacing: 0.3px; transition: all 0.15s;
+      animation: pulseGlow 2.8s infinite;
     }
     .btn-primary:hover { background: #e63946; transform: translateY(-1px); text-decoration: none; color: #fff; }
     .btn-ghost {
@@ -134,8 +144,123 @@
       cursor: pointer; transition: all 0.15s;
     }
     .btn-ghost:hover { border-color: var(--accent2); color: var(--accent2); text-decoration: none; }
-    .hero-note { font-size: 0.78rem; color: var(--muted); }
-    .hero-note span { color: var(--accent2); font-weight: 600; }
+
+    /* ── REVEAL ── */
+    .reveal {
+      opacity: 0;
+      transform: translateY(22px);
+      transition: opacity 0.55s ease, transform 0.55s ease;
+    }
+    .reveal.visible {
+      opacity: 1;
+      transform: translateY(0);
+    }
+
+    /* ── CANVAS ── */
+    #hero-canvas {
+      position: absolute;
+      inset: 0;
+      pointer-events: none;
+      z-index: 0;
+    }
+    .hero > *:not(#hero-canvas) {
+      position: relative;
+      z-index: 1;
+    }
+
+    /* ── LIVE BADGE ── */
+    .live-badge {
+      display: inline-flex;
+      align-items: center;
+      gap: 8px;
+      background: rgba(255,70,85,0.07);
+      border: 1px solid rgba(255,70,85,0.22);
+      border-radius: 20px;
+      padding: 5px 15px;
+      font-size: 0.78rem;
+      font-weight: 600;
+      color: rgba(240,244,255,0.8);
+      margin-bottom: 16px;
+      animation: fadeInUp 0.5s ease both;
+    }
+    .live-dot {
+      width: 7px;
+      height: 7px;
+      border-radius: 50%;
+      background: #ff4655;
+      animation: livePulse 1.6s infinite;
+      flex-shrink: 0;
+    }
+
+    /* ── FPS WIDGET ── */
+    .hero-fps {
+      display: inline-flex;
+      align-items: flex-end;
+      gap: 16px;
+      background: rgba(17,24,39,0.75);
+      border: 1px solid var(--border);
+      border-radius: 16px;
+      padding: 18px 28px;
+      margin-bottom: 28px;
+      backdrop-filter: blur(10px);
+      animation: fadeInUp 0.65s ease 0.38s both;
+    }
+    .fps-col {
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      gap: 4px;
+      min-width: 72px;
+    }
+    .fps-tag {
+      font-size: 0.65rem;
+      font-weight: 700;
+      text-transform: uppercase;
+      letter-spacing: 1.2px;
+      color: var(--muted);
+    }
+    .fps-bars {
+      height: 72px;
+      display: flex;
+      align-items: flex-end;
+      justify-content: center;
+    }
+    .fps-bar {
+      width: 28px;
+      border-radius: 3px 3px 0 0;
+      animation: barGrow 0.9s cubic-bezier(.22,1,.36,1) forwards;
+      height: 0;
+    }
+    .fps-bar.before {
+      background: #3a4e66;
+      --target-h: 28px;
+      animation-delay: 0.9s;
+    }
+    .fps-bar.after {
+      background: linear-gradient(180deg, #00d4aa, #009973);
+      --target-h: 68px;
+      animation-delay: 1.2s;
+    }
+    .fps-val {
+      font-size: 1.5rem;
+      font-weight: 900;
+      line-height: 1;
+    }
+    .fps-val.before { color: var(--muted); }
+    .fps-val.after  { color: var(--accent2); }
+    .fps-unit {
+      font-size: 0.65rem;
+      color: var(--muted);
+    }
+    .fps-divider {
+      align-self: center;
+      padding-bottom: 20px;
+      font-size: 1.2rem;
+      font-weight: 700;
+      color: var(--accent);
+      opacity: 0;
+      animation: fadeIn 0.4s ease 1.5s forwards;
+    }
 
     /* ── STATS STRIP ── */
     .stats-strip {
@@ -146,9 +271,10 @@
     .stat-item {
       flex: 1; min-width: 160px; padding: 28px 20px;
       text-align: center; border-right: 1px solid var(--border);
+      cursor: default;
     }
     .stat-item:last-child { border-right: none; }
-    .stat-val { font-size: 2rem; font-weight: 900; color: var(--accent); line-height: 1; }
+    .stat-val { font-size: 2rem; font-weight: 900; color: var(--accent); line-height: 1; transition: transform 0.3s; }
     .stat-lbl { font-size: 0.8rem; color: var(--muted); margin-top: 4px; }
 
     /* ── SECTIONS ── */
@@ -174,9 +300,9 @@
     .feat-card {
       background: var(--panel); border: 1px solid var(--border);
       border-radius: 12px; padding: 24px;
-      transition: border-color 0.2s, transform 0.2s;
+      transition: border-color 0.2s, transform 0.2s, box-shadow 0.2s;
     }
-    .feat-card:hover { border-color: rgba(255,70,85,0.35); transform: translateY(-2px); }
+    .feat-card:hover { border-color: rgba(255,70,85,0.35); transform: translateY(-2px); box-shadow: 0 8px 32px rgba(255,70,85,0.1); }
     .feat-icon { font-size: 1.6rem; margin-bottom: 12px; }
     .feat-title { font-weight: 700; font-size: 1rem; margin-bottom: 6px; }
     .feat-desc { color: var(--muted); font-size: 0.88rem; line-height: 1.55; }
@@ -296,6 +422,40 @@
       .stat-item { min-width: 120px; }
       footer { flex-direction: column; }
     }
+
+    /* ── KEYFRAME ANIMATIONS ── */
+    @keyframes fadeInUp {
+      from { opacity: 0; transform: translateY(28px); }
+      to   { opacity: 1; transform: translateY(0); }
+    }
+    @keyframes fadeIn {
+      from { opacity: 0; }
+      to   { opacity: 1; }
+    }
+    @keyframes pulseGlow {
+      0%, 100% {
+        box-shadow: 0 0 0 0 rgba(255,70,85,0.35), 0 4px 20px rgba(255,70,85,0.2);
+      }
+      50% {
+        box-shadow: 0 0 0 8px rgba(255,70,85,0), 0 4px 40px rgba(255,70,85,0.45);
+      }
+    }
+    @keyframes livePulse {
+      0%, 100% { opacity: 1; transform: scale(1); }
+      50%       { opacity: 0.3; transform: scale(1.6); }
+    }
+    @keyframes barGrow {
+      from { height: 0; opacity: 0; }
+      to   { height: var(--target-h); opacity: 1; }
+    }
+    @keyframes float {
+      0%, 100% { transform: translateY(0); }
+      50%       { transform: translateY(-6px); }
+    }
+    @keyframes shimmer {
+      from { background-position: -200% center; }
+      to   { background-position: 200% center; }
+    }
   </style>
 </head>
 <body>
@@ -317,8 +477,33 @@
 
   <!-- HERO -->
   <section class="hero">
+    <canvas id="hero-canvas"></canvas>
+
+    <div class="live-badge">
+      <span class="live-dot"></span>
+      Boosting Valorant players worldwide
+    </div>
+
     <div class="hero-badge">✓ Vanguard Safe &nbsp;·&nbsp; 100% Free &nbsp;·&nbsp; No Bloatware</div>
+
     <h1>Boost Your <em>Valorant FPS</em><br>in Under 60 Seconds</h1>
+
+    <div class="hero-fps">
+      <div class="fps-col">
+        <div class="fps-tag">Before</div>
+        <div class="fps-bars"><div class="fps-bar before"></div></div>
+        <div class="fps-val before">62</div>
+        <div class="fps-unit">FPS</div>
+      </div>
+      <div class="fps-divider">→</div>
+      <div class="fps-col">
+        <div class="fps-tag">After</div>
+        <div class="fps-bars"><div class="fps-bar after"></div></div>
+        <div class="fps-val after">144</div>
+        <div class="fps-unit">FPS</div>
+      </div>
+    </div>
+
     <p class="hero-sub">
       Valo Optimise is a free Windows desktop app that tunes your OS, network, CPU, GPU and mouse for peak competitive Valorant performance — no game files touched, fully Vanguard safe.
     </p>
@@ -336,11 +521,11 @@
   <!-- STATS -->
   <div class="stats-strip">
     <div class="stat-item">
-      <div class="stat-val">+80</div>
+      <div class="stat-val" data-target="80" data-prefix="+">+80</div>
       <div class="stat-lbl">Average FPS Gained</div>
     </div>
     <div class="stat-item">
-      <div class="stat-val">16</div>
+      <div class="stat-val" data-target="16">16</div>
       <div class="stat-lbl">Optimisation Modules</div>
     </div>
     <div class="stat-item">
@@ -348,7 +533,7 @@
       <div class="stat-lbl">Mouse Input Lag Added</div>
     </div>
     <div class="stat-item">
-      <div class="stat-val">100%</div>
+      <div class="stat-val" data-target="100" data-suffix="%">100%</div>
       <div class="stat-lbl">Vanguard Safe</div>
     </div>
     <div class="stat-item">
@@ -360,67 +545,67 @@
   <!-- FEATURES -->
   <section id="features">
     <div class="center">
-      <div class="section-label">What It Does</div>
-      <h2 class="section-title">Every Optimisation Your PC Needs<br>for Competitive Valorant</h2>
-      <p class="section-sub">One app covers everything — no hunting through YouTube tutorials or Reddit guides.</p>
+      <div class="section-label reveal">What It Does</div>
+      <h2 class="section-title reveal">Every Optimisation Your PC Needs<br>for Competitive Valorant</h2>
+      <p class="section-sub reveal">One app covers everything — no hunting through YouTube tutorials or Reddit guides.</p>
     </div>
     <div class="features-grid">
-      <div class="feat-card">
+      <div class="feat-card reveal" style="--delay: 0s; transition-delay: var(--delay)">
         <div class="feat-icon">🚀</div>
         <div class="feat-title">One-Click Pre-Game Boost</div>
         <div class="feat-desc">Apply every optimisation at once before you queue. Kills background processes, sets power plan, flushes DNS, primes your PC.</div>
       </div>
-      <div class="feat-card">
+      <div class="feat-card reveal" style="--delay: 0.08s; transition-delay: var(--delay)">
         <div class="feat-icon">⚡</div>
         <div class="feat-title">System Optimiser</div>
         <div class="feat-desc">Disables Windows Update during gameplay, kills DiagTrack, sets Ultimate Performance power plan, frees RAM.</div>
       </div>
-      <div class="feat-card">
+      <div class="feat-card reveal" style="--delay: 0.16s; transition-delay: var(--delay)">
         <div class="feat-icon">🌐</div>
         <div class="feat-title">Network & Ping Reducer</div>
         <div class="feat-desc">Switches DNS to Cloudflare or Google, disables NIC power saving, tunes TCP Nagle algorithm and buffer sizes.</div>
       </div>
-      <div class="feat-card">
+      <div class="feat-card reveal" style="--delay: 0.24s; transition-delay: var(--delay)">
         <div class="feat-icon">🔧</div>
         <div class="feat-title">Registry Tweaks</div>
         <div class="feat-desc">Applies proven Windows registry performance tweaks for reduced scheduling jitter and faster system responsiveness.</div>
       </div>
-      <div class="feat-card">
+      <div class="feat-card reveal" style="--delay: 0.32s; transition-delay: var(--delay)">
         <div class="feat-icon">🖱️</div>
         <div class="feat-title">Mouse & Aim Optimiser</div>
         <div class="feat-desc">Disables mouse acceleration, sets raw input, calculates your eDPI, and prevents USB suspend interruptions.</div>
       </div>
-      <div class="feat-card">
+      <div class="feat-card reveal" style="--delay: 0.4s; transition-delay: var(--delay)">
         <div class="feat-icon">⏱️</div>
         <div class="feat-title">CPU & Timer Resolution</div>
         <div class="feat-desc">Sets 0.5ms Windows timer resolution, disables dynamic tick and core parking for consistent frame delivery.</div>
       </div>
-      <div class="feat-card">
+      <div class="feat-card reveal" style="--delay: 0.48s; transition-delay: var(--delay)">
         <div class="feat-icon">🎮</div>
         <div class="feat-title">GPU Optimiser</div>
         <div class="feat-desc">Disables AMD ULPS and Chill mode, toggles Hardware-Accelerated GPU Scheduling for reduced latency.</div>
       </div>
-      <div class="feat-card">
+      <div class="feat-card reveal" style="--delay: 0.56s; transition-delay: var(--delay)">
         <div class="feat-icon">🎮</div>
         <div class="feat-title">Valorant Config Editor</div>
         <div class="feat-desc">Edit GameUserSettings.ini directly in-app. Apply known high-FPS config presets with one click.</div>
       </div>
-      <div class="feat-card">
+      <div class="feat-card reveal" style="--delay: 0.64s; transition-delay: var(--delay)">
         <div class="feat-icon">👁️</div>
         <div class="feat-title">Visibility Enhancer</div>
         <div class="feat-desc">Adjusts AMD display brightness, contrast and gamma via registry for better enemy visibility without reshade.</div>
       </div>
-      <div class="feat-card">
+      <div class="feat-card reveal" style="--delay: 0.72s; transition-delay: var(--delay)">
         <div class="feat-icon">🔊</div>
         <div class="feat-title">Audio Optimiser</div>
         <div class="feat-desc">Disables Windows Sonic and sets MMCSS priority for lower audio latency and cleaner footstep audio.</div>
       </div>
-      <div class="feat-card">
+      <div class="feat-card reveal" style="--delay: 0.8s; transition-delay: var(--delay)">
         <div class="feat-icon">🗂️</div>
         <div class="feat-title">Startup Manager</div>
         <div class="feat-desc">View and disable startup programs that steal resources before Valorant even loads.</div>
       </div>
-      <div class="feat-card">
+      <div class="feat-card reveal" style="--delay: 0.88s; transition-delay: var(--delay)">
         <div class="feat-icon">📊</div>
         <div class="feat-title">Stats Tracker</div>
         <div class="feat-desc">Log your matches and track your stats over time to see the real-world impact of your optimisations.</div>
@@ -438,22 +623,22 @@
   <!-- HOW IT WORKS -->
   <section id="how-it-works" style="background:var(--panel);border-top:1px solid var(--border);border-bottom:1px solid var(--border);">
     <div class="center">
-      <div class="section-label">How It Works</div>
-      <h2 class="section-title">Up and Running in 3 Steps</h2>
-      <p class="section-sub">No technical knowledge required. No bloatware. No background services running after you're done.</p>
+      <div class="section-label reveal">How It Works</div>
+      <h2 class="section-title reveal">Up and Running in 3 Steps</h2>
+      <p class="section-sub reveal">No technical knowledge required. No bloatware. No background services running after you're done.</p>
     </div>
     <div class="steps">
-      <div class="step">
+      <div class="step reveal">
         <div class="step-num">1</div>
         <div class="step-title">Download & Run</div>
         <div class="step-desc">Download the free EXE from GitHub Releases. Right-click → Run as Administrator for full access.</div>
       </div>
-      <div class="step">
+      <div class="step reveal">
         <div class="step-num">2</div>
         <div class="step-title">Choose Your Tweaks</div>
         <div class="step-desc">Use the sidebar to navigate modules, or hit ⚡ Pre-Game Boost to apply everything at once before you queue.</div>
       </div>
-      <div class="step">
+      <div class="step reveal">
         <div class="step-num">3</div>
         <div class="step-title">Drop Into Game</div>
         <div class="step-desc">Launch Valorant and feel the difference. Higher FPS, lower ping, smoother mouse — same hardware.</div>
@@ -464,12 +649,12 @@
   <!-- PRICING -->
   <section id="pricing">
     <div class="center">
-      <div class="section-label">Pricing</div>
-      <h2 class="section-title">Start Free. Upgrade When You're Ready.</h2>
-      <p class="section-sub">The core optimiser is completely free, forever. Pro adds advanced features for players who want every edge.</p>
+      <div class="section-label reveal">Pricing</div>
+      <h2 class="section-title reveal">Start Free. Upgrade When You're Ready.</h2>
+      <p class="section-sub reveal">The core optimiser is completely free, forever. Pro adds advanced features for players who want every edge.</p>
     </div>
     <div class="pricing-grid">
-      <div class="price-card">
+      <div class="price-card reveal">
         <div class="price-tier">Free</div>
         <div class="price-amount">£0 <span>/ forever</span></div>
         <div class="price-desc">All the core optimisations. No time limit, no account required.</div>
@@ -487,7 +672,7 @@
         </ul>
         <a class="price-cta ghost" href="https://github.com/harveyjenkins03-coder/valo-optimise/releases/latest">⬇ Download Free</a>
       </div>
-      <div class="price-card featured">
+      <div class="price-card featured reveal">
         <div class="price-tag">MOST POPULAR</div>
         <div class="price-tier">Pro</div>
         <div class="price-amount">£4.99 <span>/ month</span></div>
@@ -504,9 +689,9 @@
           <li>Early access to new features</li>
           <li>Lifetime access option available</li>
         </ul>
-        <a class="price-cta primary" href="https://harveyj82.gumroad.com/l/uriyw" id="pro-cta">Get Pro — £4.99/mo</a>
+        <a class="price-cta primary" href="https://valooptimise.gumroad.com/l/uriyw" id="pro-cta">Get Pro — £4.99/mo</a>
       </div>
-      <div class="price-card">
+      <div class="price-card reveal">
         <div class="price-tier">Lifetime</div>
         <div class="price-amount">£69.99 <span>one-time</span></div>
         <div class="price-desc">Pay once, own it forever. All Pro features plus lifetime updates.</div>
@@ -522,7 +707,7 @@
           <li class="dim">—</li>
           <li class="dim">—</li>
         </ul>
-        <a class="price-cta ghost" href="https://harveyj82.gumroad.com/l/tsqtaq" id="lifetime-cta">Get Lifetime — £69.99</a>
+        <a class="price-cta ghost" href="https://valooptimise.gumroad.com/l/tsqtaq" id="lifetime-cta">Get Lifetime — £69.99</a>
       </div>
     </div>
     <p style="text-align:center;font-size:0.72rem;color:var(--muted);margin-top:24px;padding:0 5vw;">
@@ -536,10 +721,10 @@
   <!-- FAQ -->
   <section id="faq" style="background:var(--panel);border-top:1px solid var(--border);">
     <div class="center">
-      <div class="section-label">FAQ</div>
-      <h2 class="section-title">Common Questions</h2>
+      <div class="section-label reveal">FAQ</div>
+      <h2 class="section-title reveal">Common Questions</h2>
     </div>
-    <div class="faq-list">
+    <div class="faq-list reveal">
       <div class="faq-item">
         <button class="faq-q" onclick="toggleFaq(this)">
           Will this get me banned in Valorant?
@@ -594,9 +779,9 @@
 
   <!-- FINAL CTA -->
   <section style="text-align:center;padding:80px 5vw;">
-    <div class="section-label">Ready?</div>
-    <h2 class="section-title">Stop Blaming Your Hardware.<br>Start Dominating.</h2>
-    <p class="section-sub" style="margin:0 auto 36px;">Thousands of Valorant players have already boosted their FPS with Valo Optimise. It's free, it's instant, and it works.</p>
+    <div class="section-label reveal">Ready?</div>
+    <h2 class="section-title reveal">Stop Blaming Your Hardware.<br>Start Dominating.</h2>
+    <p class="section-sub reveal" style="margin:0 auto 36px;">Thousands of Valorant players have already boosted their FPS with Valo Optimise. It's free, it's instant, and it works.</p>
     <a class="btn-primary" style="font-size:1.1rem;padding:16px 36px;" href="https://github.com/harveyjenkins03-coder/valo-optimise/releases/latest">
       ⬇ Download Free Now
     </a>
@@ -624,7 +809,7 @@
     <div class="footer-links">
       <h4>Legal</h4>
       <a href="https://github.com/harveyjenkins03-coder/valo-optimise-src/blob/master/TERMS.md">Terms of Service</a>
-      <a href="https://github.com/harveyjenkins03-coder/valo-optimise-src/blob/master/PRIVACY.md">Privacy Policy</a>
+      <a href="https://valooptimise.com/privacy.html">Privacy Policy</a>
       <a href="https://github.com/harveyjenkins03-coder/valo-optimise-src/blob/master/DISCLAIMER.md">Disclaimer</a>
       <a href="https://github.com/harveyjenkins03-coder/valo-optimise-src/blob/master/LICENSE">Licence (MIT)</a>
     </div>
@@ -643,19 +828,121 @@
   </div>
 
   <script>
-    function toggleFaq(btn) {
-      const answer = btn.nextElementSibling;
-      const isOpen = btn.classList.contains('open');
-      // Close all
-      document.querySelectorAll('.faq-q').forEach(b => {
-        b.classList.remove('open');
-        b.nextElementSibling.classList.remove('open');
-      });
-      if (!isOpen) {
-        btn.classList.add('open');
-        answer.classList.add('open');
-      }
+  // ── FAQ toggle ────────────────────────────────────────────────────────────
+  function toggleFaq(btn) {
+    const answer = btn.nextElementSibling;
+    const isOpen = btn.classList.contains('open');
+    document.querySelectorAll('.faq-q').forEach(b => {
+      b.classList.remove('open');
+      b.nextElementSibling.classList.remove('open');
+    });
+    if (!isOpen) {
+      btn.classList.add('open');
+      answer.classList.add('open');
     }
+  }
+
+  // ── Particle canvas background ────────────────────────────────────────────
+  (function() {
+    const canvas = document.getElementById('hero-canvas');
+    if (!canvas) return;
+    const ctx = canvas.getContext('2d');
+    let W, H, particles = [], animId;
+
+    function resize() {
+      W = canvas.width  = canvas.offsetWidth;
+      H = canvas.height = canvas.offsetHeight;
+    }
+
+    function Particle() {
+      this.x = Math.random() * W;
+      this.y = Math.random() * H;
+      this.vx = (Math.random() - 0.5) * 0.35;
+      this.vy = (Math.random() - 0.5) * 0.35;
+      this.r  = Math.random() * 1.5 + 0.5;
+      this.alpha = Math.random() * 0.4 + 0.1;
+    }
+
+    function init() {
+      resize();
+      particles = Array.from({ length: 90 }, () => new Particle());
+    }
+
+    function draw() {
+      ctx.clearRect(0, 0, W, H);
+      // Lines
+      for (let i = 0; i < particles.length; i++) {
+        for (let j = i + 1; j < particles.length; j++) {
+          const dx = particles[i].x - particles[j].x;
+          const dy = particles[i].y - particles[j].y;
+          const dist = Math.sqrt(dx * dx + dy * dy);
+          if (dist < 130) {
+            ctx.beginPath();
+            ctx.strokeStyle = `rgba(255,70,85,${0.06 * (1 - dist / 130)})`;
+            ctx.lineWidth = 0.5;
+            ctx.moveTo(particles[i].x, particles[i].y);
+            ctx.lineTo(particles[j].x, particles[j].y);
+            ctx.stroke();
+          }
+        }
+      }
+      // Dots
+      particles.forEach(p => {
+        p.x += p.vx; p.y += p.vy;
+        if (p.x < 0 || p.x > W) p.vx *= -1;
+        if (p.y < 0 || p.y > H) p.vy *= -1;
+        ctx.beginPath();
+        ctx.arc(p.x, p.y, p.r, 0, Math.PI * 2);
+        ctx.fillStyle = `rgba(255,70,85,${p.alpha})`;
+        ctx.fill();
+      });
+      animId = requestAnimationFrame(draw);
+    }
+
+    init();
+    draw();
+    window.addEventListener('resize', () => { cancelAnimationFrame(animId); init(); draw(); });
+  })();
+
+  // ── Scroll reveal ─────────────────────────────────────────────────────────
+  const revealObserver = new IntersectionObserver((entries) => {
+    entries.forEach(e => {
+      if (e.isIntersecting) {
+        e.target.classList.add('visible');
+        revealObserver.unobserve(e.target);
+      }
+    });
+  }, { threshold: 0.12 });
+
+  document.querySelectorAll('.reveal').forEach(el => revealObserver.observe(el));
+
+  // ── Animated stat counters ────────────────────────────────────────────────
+  function animateCounter(el) {
+    const target = parseInt(el.dataset.target, 10);
+    const prefix = el.dataset.prefix || '';
+    const suffix = el.dataset.suffix || '';
+    if (isNaN(target)) return;
+    const duration = 1400;
+    const start = performance.now();
+    function step(now) {
+      const progress = Math.min((now - start) / duration, 1);
+      const ease = 1 - Math.pow(1 - progress, 3);
+      el.textContent = prefix + Math.round(ease * target) + suffix;
+      if (progress < 1) requestAnimationFrame(step);
+    }
+    requestAnimationFrame(step);
+  }
+
+  const statObserver = new IntersectionObserver((entries) => {
+    entries.forEach(e => {
+      if (e.isIntersecting && e.target.dataset.target) {
+        animateCounter(e.target);
+        statObserver.unobserve(e.target);
+      }
+    });
+  }, { threshold: 0.5 });
+
+  document.querySelectorAll('.stat-val[data-target]').forEach(el => statObserver.observe(el));
   </script>
 </body>
 </html>
