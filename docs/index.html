@@ -65,8 +65,10 @@
     a:hover { text-decoration: underline; }
 
     /* ── NAV ── */
+    #beta-banner { position: fixed; top: 0; left: 0; right: 0; z-index: 102; }
+
     nav {
-      position: fixed; top: 0; left: 0; right: 0; z-index: 100;
+      position: fixed; top: 36px; left: 0; right: 0; z-index: 101;
       display: flex; align-items: center; justify-content: space-between;
       padding: 0 5vw;
       height: 56px;
@@ -91,7 +93,7 @@
       min-height: 100vh;
       display: flex; flex-direction: column; align-items: center; justify-content: center;
       text-align: center;
-      padding: 100px 5vw 60px;
+      padding: 136px 5vw 60px;
       position: relative; overflow: hidden;
     }
     .hero::before {
@@ -557,7 +559,7 @@
 <body>
 
   <!-- BETA BANNER -->
-  <div id="beta-banner" style="background:linear-gradient(90deg,#1a0a0d,#ff4655 50%,#1a0a0d);text-align:center;padding:8px 16px;font-size:0.78rem;font-weight:600;color:#fff;letter-spacing:0.04em;position:relative;z-index:200;">
+  <div id="beta-banner" style="background:linear-gradient(90deg,#1a0a0d,#ff4655 50%,#1a0a0d);text-align:center;padding:8px 16px;font-size:0.78rem;font-weight:600;color:#fff;letter-spacing:0.04em;">
     🚀 <span style="opacity:0.85;">PUBLIC BETA</span> &nbsp;—&nbsp; We're in early access while we secure funding. Your download &amp; feedback directly shapes v1.0. &nbsp;
     <a href="https://ko-fi.com/valooptimise" target="_blank" rel="noopener" style="color:#ffd700;text-decoration:underline;">Support us on Ko-fi ☕</a>
   </div>
