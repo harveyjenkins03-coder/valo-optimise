@@ -927,6 +927,17 @@
       Every coffee you buy goes directly into marketing, servers, and keeping the free tier free for everyone.
       If you've ever wanted to back a small business from day one — this is it.
     </p>
+    <!-- Goal progress -->
+    <div class="reveal" style="max-width:480px;margin:0 auto 32px;background:var(--panel2);border:1px solid var(--border);border-radius:14px;padding:22px 28px;text-align:left;">
+      <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:10px;">
+        <span style="font-size:0.82rem;font-weight:700;color:var(--text);">🚀 First Marketing Push</span>
+        <span style="font-size:0.78rem;color:var(--accent2);font-weight:700;">Goal: £500</span>
+      </div>
+      <div style="height:8px;background:rgba(255,255,255,0.06);border-radius:4px;overflow:hidden;margin-bottom:10px;">
+        <div style="height:100%;width:0%;background:linear-gradient(90deg,#ff5e5b,#ff4655);border-radius:4px;transition:width 1.5s ease;" id="kofi-goal-bar"></div>
+      </div>
+      <p style="font-size:0.78rem;color:var(--muted);margin:0;">Getting Valo Optimise in front of the players who need it — Reddit ads, content creation, and reaching our first 1,000 players.</p>
+    </div>
     <a class="btn-primary reveal" style="font-size:1rem;padding:14px 32px;background:#ff5e5b;display:inline-flex;align-items:center;gap:10px;" href="https://ko-fi.com/valooptimise" target="_blank" rel="noopener">
       ☕ Buy Us a Coffee
     </a>
@@ -1091,6 +1102,18 @@
   }, { threshold: 0.5 });
 
   document.querySelectorAll('.stat-val[data-target]').forEach(el => statObserver.observe(el));
+
+  // ── Ko-fi goal bar ────────────────────────────────────────────────────────
+  const goalBar = document.getElementById('kofi-goal-bar');
+  if (goalBar) {
+    const goalObs = new IntersectionObserver(entries => {
+      if (entries[0].isIntersecting) {
+        setTimeout(() => { goalBar.style.width = '4%'; }, 300);
+        goalObs.disconnect();
+      }
+    }, { threshold: 0.5 });
+    goalObs.observe(goalBar);
+  }
 
   // ── FPS widget count-up + live fluctuation ───────────────────────────────
   function countUpFps(el, target, duration, delayMs, onDone) {
