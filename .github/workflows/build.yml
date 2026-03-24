@@ -47,19 +47,88 @@ jobs:
           repository: harveyjenkins03-coder/valo-optimise
           token: ${{ secrets.RELEASE_PAT }}
           body: |
-            ## Valo Optimise v${{ steps.version.outputs.version }}
+            <div align="center">
 
-            ### Install
-            1. Download `ValoOptimise.exe` below
-            2. Run as Administrator (right-click → Run as administrator)
-            3. Accept the UAC prompt
+            # 🎮 Valo Optimise v${{ steps.version.outputs.version }}
+            **The free Windows performance suite built for competitive Valorant players.**
+            Tune your OS, network, CPU, GPU and mouse — no game files touched, no bloat, no risk.
 
-            ### Requirements
-            - Windows 10 / 11
-            - Administrator rights
+            [![Windows](https://img.shields.io/badge/Windows-10%20%2F%2011-0078D6?logo=windows)](https://valo-optimise.pages.dev)
+            [![Vanguard Safe](https://img.shields.io/badge/Vanguard-Safe-00d4aa?logo=riotgames)](https://valo-optimise.pages.dev)
+            [![Free](https://img.shields.io/badge/Free-Always-ff4655)](https://valo-optimise.pages.dev)
+            [![Pro](https://img.shields.io/badge/Pro-£4.99%2Fmo-ffd700)](https://harveyj82.gumroad.com/l/uriyw)
+
+            </div>
 
             ---
-            *Built automatically from source by GitHub Actions.*
+
+            ## ⬇️ Download & Install
+
+            1. Click **`ValoOptimise.exe`** below to download
+            2. **Right-click → Run as administrator**
+            3. Accept the UAC prompt — required for system-level tweaks
+            4. Follow the first-launch setup wizard
+
+            > **Requirements:** Windows 10 or 11 · Administrator rights · ~50MB disk space
+
+            ---
+
+            ## ✨ What Valo Optimise Does
+
+            | Category | Optimisations |
+            |----------|--------------|
+            | ⚡ **System** | Ultimate Performance power plan · RAM optimisation · background process cleanup |
+            | 🌐 **Network** | DNS → Cloudflare 1.1.1.1 · TCP auto-tuning · NIC power saving off · ping reduction |
+            | 🖥️ **GPU** | AMD ULPS off · HAGS toggle · shader cache management |
+            | 🖱️ **Mouse** | Raw input · acceleration off · USB polling rate monitor · eDPI calculator |
+            | 🎮 **Valorant** | GameUserSettings.ini editor · resolution & FPS cap tuning |
+            | 🔊 **Audio** | MMCSS priority boost · Windows Sonic disable |
+            | ⏱️ **CPU** | 1ms timer resolution · core parking off · CPU boost mode |
+            | 🗑️ **Startup** | Startup program manager — remove bloat from boot |
+            | 📊 **Stats** | Match history tracker with MMR lookup |
+            | 👁️ **Visual** | AMD colour registry · game mode · transparency effects off |
+
+            ---
+
+            ## 🔒 Security & Privacy
+
+            - **Zero game process interaction** — only OS-level changes. Riot Vanguard has no issue with this tool.
+            - **No data collection** — no telemetry, no analytics, no crash reporting. Nothing leaves your PC.
+            - **No internet required** — all optimisations run locally. The only optional network call is the Valorant stats lookup, which is entirely opt-in.
+            - **Registry backups** — every tweak is backed up before being applied. One-click revert available in-app.
+            - **Open releases** — every `.exe` in this repo is built automatically by GitHub Actions from source. The build log is public and auditable.
+            - **UAC elevation** — admin rights are used solely for registry and system settings. No personal files are accessed.
+
+            ---
+
+            ## 🆓 Free vs Pro
+
+            | Feature | Free | Pro |
+            |---------|------|-----|
+            | System, Network, Registry tweaks | ✅ | ✅ |
+            | Mouse optimiser + eDPI calc | ✅ | ✅ |
+            | Startup manager | ✅ | ✅ |
+            | Settings guide | ✅ | ✅ |
+            | GPU optimiser | ❌ | ✅ |
+            | CPU timer & core parking | ❌ | ✅ |
+            | Valorant config editor | ❌ | ✅ |
+            | Mouse driver & polling rate | ❌ | ✅ |
+            | Audio optimiser | ❌ | ✅ |
+            | Visibility (AMD colour) | ❌ | ✅ |
+            | Stats tracker | ❌ | ✅ |
+            | **Price** | **Free forever** | **£4.99/mo or £69.99 lifetime** |
+
+            👉 [**Get Pro**](https://harveyj82.gumroad.com/l/uriyw) · [**Get Lifetime**](https://harveyj82.gumroad.com/l/tsqtaq)
+
+            ---
+
+            ## 🌐 Links
+
+            [🌍 Website](https://valo-optimise.pages.dev) · [🛒 Get Pro](https://harveyj82.gumroad.com/l/uriyw) · [📋 Privacy Policy](https://valo-optimise.pages.dev)
+
+            ---
+
+            <sub>Built automatically from source · GitHub Actions CI · © 2026 Harvey Jenkins & Tobias Sanders</sub>
           files: dist/ValoOptimise.exe
           fail_on_unmatched_files: true
           make_latest: true
