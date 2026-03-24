@@ -43,14 +43,15 @@ jobs:
         uses: softprops/action-gh-release@v2
         with:
           tag_name: v${{ steps.version.outputs.version }}
-          name: "Valo Optimise v${{ steps.version.outputs.version }}"
+          name: "Valo Optimise v${{ steps.version.outputs.version }} — Public Beta"
           repository: harveyjenkins03-coder/valo-optimise
           token: ${{ secrets.RELEASE_PAT }}
           body: |
             <div align="center">
 
-            # 🎮 Valo Optimise v${{ steps.version.outputs.version }}
-            **The free Windows performance suite built for competitive Valorant players.**
+            # 🎮 Valo Optimise v${{ steps.version.outputs.version }} — Public Beta
+            **Free Windows performance suite built for competitive Valorant players.**
+            We're in public beta — your download and feedback directly shapes the v1.0 release.
             Tune your OS, network, CPU, GPU and mouse — no game files touched, no bloat, no risk.
 
             [![Windows](https://img.shields.io/badge/Windows-10%20%2F%2011-0078D6?logo=windows)](https://valooptimise.com)
@@ -96,7 +97,7 @@ jobs:
             - **No data collection** — no telemetry, no analytics, no crash reporting. Nothing leaves your PC.
             - **No internet required** — all optimisations run locally. The only optional network call is the Valorant stats lookup, which is entirely opt-in.
             - **Registry backups** — every tweak is backed up before being applied. One-click revert available in-app.
-            - **Open releases** — every `.exe` in this repo is built automatically by GitHub Actions from source. The build log is public and auditable.
+            - **Official release only** — always download from this page. Do not run `.exe` files from any other source claiming to be Valo Optimise.
             - **UAC elevation** — admin rights are used solely for registry and system settings. No personal files are accessed.
 
             ---
@@ -128,7 +129,7 @@ jobs:
 
             ---
 
-            <sub>Built automatically from source · GitHub Actions CI · © 2026 Harvey Jenkins & Tobias Sanders</sub>
+            <sub>© 2026 Harvey Jenkins & Tobias Sanders · All Rights Reserved · Proprietary Software</sub>
           files: dist/ValoOptimise.exe
           fail_on_unmatched_files: true
           make_latest: true
