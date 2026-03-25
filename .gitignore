@@ -10,6 +10,7 @@ build/
 
 # App data
 config.json
+!docs/api/config.json
 sensitivity_profiles.json
 backups/
 paperclip_config.json
