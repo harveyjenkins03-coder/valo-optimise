@@ -48,7 +48,11 @@ _GUMROAD_LIFETIME_ID = "tsqtaq"
 _GUMROAD_VERIFY_URL  = "https://api.gumroad.com/v2/licenses/verify"
 
 # ── Beta / custom validation server ─────────────────────────────────────────
-_VALIDATION_URL = "https://noncancerous-lizette-nonscientifically.ngrok-free.dev"
+# URL is fetched dynamically from the config endpoint so no rebuild is needed
+# when the server URL changes (e.g. ngrok restart).
+_CONFIG_ENDPOINT   = "https://valooptimise.com/api/config.json"
+_VALIDATION_URL    = ""   # populated at runtime by _get_validation_url()
+_cached_val_url    = ""   # in-memory cache
 
 # ── Cache TTLs ───────────────────────────────────────────────────────────────
 _CACHE_HOURS                   = 24       # Gumroad cache (hours)
@@ -252,6 +256,26 @@ def _verify_gumroad(key: str, product_id: str) -> tuple[bool, str]:
 
 # ── Beta key validation ───────────────────────────────────────────────────────
 
+def _get_validation_url() -> str:
+    """
+    Fetches the current validation server URL from the Cloudflare-hosted config.
+    Caches the result in memory. Falls back to the cached value if the fetch fails.
+    """
+    global _cached_val_url
+    try:
+        req = urllib.request.Request(_CONFIG_ENDPOINT, method="GET")
+        req.add_header("User-Agent", "ValoOptimise/1.0")
+        with urllib.request.urlopen(req, timeout=5) as resp:
+            data = json.loads(resp.read().decode())
+            url = data.get("validation_url", "").strip().rstrip("/")
+            if url:
+                _cached_val_url = url
+                return url
+    except Exception:
+        pass
+    return _cached_val_url
+
+
 def _activate_beta(key: str) -> dict:
     """
     POST key + machine_id to /activate on the validation server.
@@ -259,7 +283,7 @@ def _activate_beta(key: str) -> dict:
     error values: "invalid_key", "machine_mismatch", "server_unreachable",
                   "beta_expired", "revoked"
     """
-    url = _VALIDATION_URL.rstrip("/") + "/activate"
+    url = _get_validation_url() + "/activate"
     payload = json.dumps({
         "key":        key.strip(),
         "machine_id": _get_machine_id(),
@@ -334,10 +358,7 @@ def _do_beta_checkin(key: str) -> None:
     """
     key_hash   = hashlib.sha256(key.strip().upper().encode()).hexdigest()
     machine_id = _get_machine_id()
-    url = (
-        _VALIDATION_URL.rstrip("/")
-        + f"/beta-status?h={key_hash}&m={quote(machine_id)}"
-    )
+    url = _get_validation_url() + f"/beta-status?h={key_hash}&m={quote(machine_id)}"
 
     try:
         with urlopen(Request(url, method="GET"), timeout=8) as resp:
