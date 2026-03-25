@@ -290,6 +290,7 @@ def _activate_beta(key: str) -> dict:
     }).encode()
     req = Request(url, data=payload, method="POST")
     req.add_header("Content-Type", "application/json")
+    req.add_header("ngrok-skip-browser-warning", "1")
 
     try:
         with urlopen(req, timeout=10) as resp:
@@ -361,7 +362,9 @@ def _do_beta_checkin(key: str) -> None:
     url = _get_validation_url() + f"/beta-status?h={key_hash}&m={quote(machine_id)}"
 
     try:
-        with urlopen(Request(url, method="GET"), timeout=8) as resp:
+        _req = Request(url, method="GET")
+        _req.add_header("ngrok-skip-browser-warning", "1")
+        with urlopen(_req, timeout=8) as resp:
             data = json.loads(resp.read().decode())
 
         now   = _now_utc()
