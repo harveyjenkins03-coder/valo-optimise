@@ -13,8 +13,8 @@ def is_admin() -> bool:
 def require_admin() -> None:
     if not is_admin():
         script = os.path.abspath(sys.argv[0])
-        # Prefer pythonw.exe so no console window opens alongside the GUI
         exe = sys.executable
+        # Prefer pythonw.exe so no console window opens alongside the GUI
         pythonw = exe.replace("python.exe", "pythonw.exe")
         if os.path.isfile(pythonw):
             exe = pythonw
@@ -22,10 +22,14 @@ def require_admin() -> None:
             None, "runas", exe, f'"{script}"',
             os.path.dirname(script), 1
         )
-        # ret > 32 means success — exit so the elevated copy takes over
         if ret > 32:
+            # Elevated process launched successfully — exit this non-admin copy
             sys.exit(0)
-        # If UAC was denied or failed, continue running without admin
+        else:
+            # UAC was denied or elevation failed — exit with error rather than
+            # continuing in limited mode where registry writes silently fail
+            print("ERROR: Administrator privileges are required. Please accept the UAC prompt.")
+            sys.exit(1)
 
 
 def get_admin_status_label() -> str:
