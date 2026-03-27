@@ -8,6 +8,7 @@ Tune your OS, network, CPU, GPU and mouse — no game files touched, no bloat, f
 [![Windows](https://img.shields.io/badge/Windows-10%20%2F%2011-0078D6?logo=windows)](https://valooptimise.com)
 [![Vanguard Safe](https://img.shields.io/badge/Vanguard-Safe-00d4aa)](https://valooptimise.com)
 [![Ko-fi](https://img.shields.io/badge/Support%20Us-Ko--fi-ff5e5b?logo=ko-fi&logoColor=white)](https://ko-fi.com/valooptimise)
+[![Discord](https://img.shields.io/badge/Discord-Join%20Community-5865F2?logo=discord&logoColor=white)](https://discord.gg/Fpx4SnxF)
 
 ---
 
@@ -55,8 +56,8 @@ Getting Valo Optimise in front of the players who need it most.
 
 ## 🌐 Links
 
-[Website](https://valooptimise.com) · [Privacy Policy](https://valooptimise.com/privacy.html) · [Ko-fi](https://ko-fi.com/valooptimise)
+[Website](https://valooptimise.com) · [Discord](https://discord.gg/Fpx4SnxF) · [Blog](https://blog.valooptimise.com) · [Privacy Policy](https://valooptimise.com/privacy.html) · [Ko-fi](https://ko-fi.com/valooptimise)
 
 ---
 
-© 2026 Harvey Jenkins & Tobias Sanders. MIT Licence.
+© 2026 Valo Optimise Ltd. All Rights Reserved.
