@@ -2,7 +2,10 @@ import os
 import subprocess
 import ctypes
 import winreg
+import logging
 import psutil
+
+_log = logging.getLogger("valo_optimise.system")
 
 
 # Processes we must NEVER touch — game anti-cheat and critical OS processes
@@ -60,15 +63,19 @@ class SystemOptimizer:
 
     def get_current_power_plan(self) -> str:
         try:
+            import re
             result = subprocess.run(
                 ["powercfg", "/getactivescheme"],
                 capture_output=True, text=True, timeout=10
             )
             line = result.stdout.strip()
-            if "(" in line and ")" in line:
-                return line.split("(")[-1].rstrip(")")
-            return line
-        except Exception:
+            # Extract plan name from parentheses: "Power Scheme GUID: xxx  (Plan Name)"
+            match = re.search(r'\(([^)]+)\)\s*$', line)
+            if match:
+                return match.group(1)
+            return line or "Unknown"
+        except Exception as e:
+            _log.debug("Failed to get power plan: %s", e)
             return "Unknown"
 
     def get_available_power_plans(self) -> list:
@@ -328,9 +335,12 @@ class SystemOptimizer:
         added = []
         for path in paths:
             try:
+                # Use -EncodedCommand to prevent injection via path characters
+                import base64
+                ps_cmd = f"Add-MpPreference -ExclusionPath '{path.replace(chr(39), chr(39)*2)}'"
+                encoded = base64.b64encode(ps_cmd.encode('utf-16-le')).decode('ascii')
                 r = subprocess.run(
-                    ["powershell", "-Command",
-                     f"Add-MpPreference -ExclusionPath '{path}'"],
+                    ["powershell", "-NoProfile", "-EncodedCommand", encoded],
                     capture_output=True, text=True, timeout=20
                 )
                 if r.returncode == 0:
@@ -345,9 +355,11 @@ class SystemOptimizer:
         paths = self._get_riot_paths()
         for path in paths:
             try:
+                import base64
+                ps_cmd = f"Remove-MpPreference -ExclusionPath '{path.replace(chr(39), chr(39)*2)}'"
+                encoded = base64.b64encode(ps_cmd.encode('utf-16-le')).decode('ascii')
                 subprocess.run(
-                    ["powershell", "-Command",
-                     f"Remove-MpPreference -ExclusionPath '{path}'"],
+                    ["powershell", "-NoProfile", "-EncodedCommand", encoded],
                     capture_output=True, text=True, timeout=20
                 )
             except Exception:
@@ -412,8 +424,8 @@ class SystemOptimizer:
             ) as key:
                 name, _ = winreg.QueryValueEx(key, "ProcessorNameString")
                 info["cpu"] = name.strip()
-        except Exception:
-            pass
+        except Exception as e:
+            _log.debug("CPU detection failed: %s", e)
 
         # GPU — from registry display adapters
         try:

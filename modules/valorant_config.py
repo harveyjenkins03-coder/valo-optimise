@@ -77,6 +77,10 @@ class ValorantConfig:
         for entry in os.listdir(base):
             for folder_name in ("Windows", "WindowsClient"):
                 candidate = os.path.join(base, entry, folder_name, "GameUserSettings.ini")
+                # Validate resolved path stays within expected base directory
+                real_candidate = os.path.normcase(os.path.realpath(candidate))
+                if not real_candidate.startswith(local_real):
+                    continue
                 if os.path.isfile(candidate):
                     return candidate
 

@@ -183,11 +183,12 @@ class GpuOptimizer:
     # ── NVIDIA detection ──────────────────────────────────────────────────────
 
     def is_nvidia_available(self) -> bool:
-        """Return True if an NVIDIA GPU is detected."""
+        """Return True if an NVIDIA GPU is detected (uses PowerShell, wmic is deprecated on Win11 22H2+)."""
         try:
             result = subprocess.run(
-                ["wmic", "path", "win32_VideoController", "get", "Name"],
-                capture_output=True, text=True, timeout=8
+                ["powershell", "-NoProfile", "-Command",
+                 "(Get-CimInstance Win32_VideoController).Name"],
+                capture_output=True, text=True, timeout=10
             )
             return "nvidia" in result.stdout.lower()
         except Exception:
@@ -197,12 +198,12 @@ class GpuOptimizer:
         """Return the installed NVIDIA driver version string."""
         try:
             result = subprocess.run(
-                ["wmic", "path", "win32_VideoController", "where",
-                 "Name like '%NVIDIA%'", "get", "DriverVersion"],
-                capture_output=True, text=True, timeout=8
+                ["powershell", "-NoProfile", "-Command",
+                 "(Get-CimInstance Win32_VideoController | Where-Object {$_.Name -like '*NVIDIA*'}).DriverVersion"],
+                capture_output=True, text=True, timeout=10
             )
-            lines = [l.strip() for l in result.stdout.splitlines() if l.strip() and "DriverVersion" not in l]
-            return lines[0] if lines else "Unknown"
+            version = result.stdout.strip()
+            return version if version else "Unknown"
         except Exception:
             return "Unknown"
 

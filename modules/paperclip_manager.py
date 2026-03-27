@@ -39,10 +39,14 @@ REPO_URL    = "https://github.com/paperclipai/paperclip.git"
 
 def _run(cmd, *, cwd=None, timeout=300):
     """Run a subprocess, return (returncode, stdout, stderr).
-    Uses shell=True on Windows so .CMD wrappers (npm.cmd, pnpm.cmd) work."""
+    Resolves .CMD wrappers (npm.cmd, pnpm.cmd) via shutil.which instead of shell=True."""
+    if isinstance(cmd, (list, tuple)) and cmd:
+        resolved = shutil.which(cmd[0])
+        if resolved:
+            cmd = [resolved] + list(cmd[1:])
     r = subprocess.run(
         cmd, cwd=cwd, capture_output=True, text=True, timeout=timeout,
-        shell=True
+        shell=False
     )
     return r.returncode, r.stdout.strip(), r.stderr.strip()
 
