@@ -1,3 +1,6 @@
+# Copyright (c) 2026 Valo Optimise Ltd. All rights reserved.
+# Proprietary and confidential. See LICENSE for terms.
+
 """
 modules/licence_manager.py
 ===========================
@@ -64,8 +67,13 @@ _CFG_DIR  = pathlib.Path.home() / ".valooptimise"
 _LIC_FILE = _CFG_DIR / "licence.json"
 _DEV_FILE = _CFG_DIR / "dev.key"
 
-# Hash of the developer key — secret never stored in code, only its sha256
-_DEV_HASH = "29aa73ac9f6e92a1eed784eeb2db207f422f26f7e09efa242c613e41c0b15b54"
+# Developer key hash loaded from external file — never hardcoded in source
+_DEV_HASH_FILE = _CFG_DIR / "dev_hash.cfg"
+_DEV_HASH = ""
+try:
+    _DEV_HASH = _DEV_HASH_FILE.read_text(encoding="utf-8").strip()
+except Exception:
+    pass
 
 # ── Emitted when beta licence expires mid-session ────────────────────────────
 LICENCE_EXPIRED_EVENT = threading.Event()
@@ -208,7 +216,8 @@ def _beta_cache_valid(data: dict) -> bool:
 def _get_machine_id() -> str:
     """
     Returns a stable hardware fingerprint using the Windows MachineGuid.
-    Falls back to a hash of the hostname if the registry is unavailable.
+    Falls back to a combination of OS install-specific identifiers that are
+    harder to spoof than a hostname.
     """
     try:
         import winreg
@@ -219,8 +228,22 @@ def _get_machine_id() -> str:
             guid, _ = winreg.QueryValueEx(k, "MachineGuid")
             return hashlib.sha256(guid.encode()).hexdigest()[:32]
     except Exception:
-        import socket
-        return hashlib.sha256(socket.gethostname().encode()).hexdigest()[:32]
+        pass
+    # Fallback: combine multiple system identifiers for a stronger fingerprint
+    import uuid
+    parts = []
+    try:
+        parts.append(str(uuid.getnode()))  # MAC address as int
+    except Exception:
+        pass
+    try:
+        parts.append(os.environ.get("COMPUTERNAME", ""))
+        parts.append(os.environ.get("PROCESSOR_IDENTIFIER", ""))
+    except Exception:
+        pass
+    if not parts:
+        parts.append(os.urandom(16).hex())  # last resort: random, persisted via cache
+    return hashlib.sha256("|".join(parts).encode()).hexdigest()[:32]
 
 
 # ── Gumroad validation ────────────────────────────────────────────────────────
