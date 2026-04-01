@@ -1,3 +1,6 @@
+# Copyright (c) 2026 Valo Optimise Ltd. All rights reserved.
+# Proprietary and confidential. See LICENSE for terms.
+
 """
 utils/compat.py — Windows compatibility helpers for Valo Optimise
 =================================================================

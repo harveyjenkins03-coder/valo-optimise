@@ -44,5 +44,13 @@ licence.json
 # *.spec — spec is needed for CI build
 *.exe
 
+# Confidential / internal docs
+IP_REGISTRY.md
+
+# Cloudflare Wrangler local state
+.wrangler/
+docs/.wrangler/
+workers/.wrangler/
+
 # Workspace (separate repo — not part of this product)
 workspace/

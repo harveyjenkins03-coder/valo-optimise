@@ -155,15 +155,15 @@ def slide_in(widget, parent, duration_ms: int = 160):
 
 def show_toast(parent, message, toast_type="success", duration_ms=3000):
     """In-app toast notification that appears in the top-right corner."""
-    colors = {"success": "#2ECC71", "error": "#E74C3C", "info": "#F5C05A"}
+    colors = {"success": "#3DDC84", "error": "#FF5A6A", "info": "#FFCC44"}
     border_color = colors.get(toast_type, colors["info"])
     toast = None
     try:
         import customtkinter as ctk
-        toast = ctk.CTkFrame(parent, fg_color="#152235", corner_radius=8,
+        toast = ctk.CTkFrame(parent, fg_color="#162A40", corner_radius=6,
                              border_width=1, border_color=border_color)
         toast.place(relx=1.0, y=10, anchor="ne", x=-20)
-        ctk.CTkLabel(toast, text=message, font=("Sora", 11),
+        ctk.CTkLabel(toast, text=message, font=("Sora", 12),
                      text_color=border_color).pack(padx=16, pady=8)
         parent.after(duration_ms, lambda: _safe_destroy(toast))
     except Exception:

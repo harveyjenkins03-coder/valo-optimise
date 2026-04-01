@@ -1,6 +1,6 @@
 # Security Policy — Valo Optimise
 
-**Owners:** Harvey Jenkins & Tobias Sanders
+**Owner:** Valo Optimise Ltd
 
 ---
 
@@ -49,7 +49,7 @@ to the owners or any analytics service. See PRIVACY.md for full details.
 
 ## Code Integrity
 
-Only authorised owners (Harvey Jenkins & Tobias Sanders) may merge changes into
+Only authorised team members of Valo Optimise Ltd may merge changes into
 the master branch. Branch protection rules require pull request reviews before
 merging. No direct pushes to the protected branch are permitted.
 
@@ -65,4 +65,4 @@ committed. Registry backups in backups/ are also gitignored.
 
 ---
 
-(c) 2026 Harvey Jenkins & Tobias Sanders. All Rights Reserved.
+© 2026 Valo Optimise Ltd. All Rights Reserved.

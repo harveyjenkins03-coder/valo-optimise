@@ -2,7 +2,7 @@
 
 **Effective date:** 23 March 2026
 **Product:** Valo Optimise
-**Owners:** Harvey Jenkins & Tobias Sanders ("we", "us", "our")
+**Owner:** Valo Optimise Ltd ("we", "us", "our")
 
 ---
 
@@ -100,4 +100,4 @@ These Terms are governed by the laws of **England and Wales**. Any disputes shal
 For questions, support, or legal enquiries, contact us via the GitHub repository:
 github.com/harveyjenkins03-coder/valo-optimise-src
 
-© 2026 Harvey Jenkins & Tobias Sanders. All Rights Reserved.
+© 2026 Valo Optimise Ltd. All Rights Reserved.

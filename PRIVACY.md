@@ -2,7 +2,7 @@
 
 **Effective date:** 21 March 2026
 **Product:** Valo Optimise
-**Owners:** Harvey Jenkins & Tobias Sanders
+**Owner:** Valo Optimise Ltd
 
 ---
 
@@ -98,4 +98,4 @@ GitHub repository: github.com/harveyjenkins03-coder/valo-optimise-src
 
 See also: [Terms of Service](TERMS.md) · [Disclaimer](DISCLAIMER.md)
 
-© 2026 Harvey Jenkins & Tobias Sanders. All Rights Reserved.
+© 2026 Valo Optimise Ltd. All Rights Reserved.

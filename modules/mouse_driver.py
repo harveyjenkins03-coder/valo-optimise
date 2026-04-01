@@ -1,3 +1,6 @@
+# Copyright (c) 2026 Valo Optimise Ltd. All rights reserved.
+# Proprietary and confidential. See LICENSE for terms.
+
 """
 mouse_driver.py — Advanced mouse driver tools for Valo Optimise
 Provides: PollingRateMonitor, PointerBallistics, SensitivityProfileManager,

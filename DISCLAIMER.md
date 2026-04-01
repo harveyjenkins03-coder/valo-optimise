@@ -38,4 +38,4 @@ The Software is provided on an "as is" basis. See the full Terms of Service (TER
 
 ---
 
-© 2026 Harvey Jenkins & Tobias Sanders. All Rights Reserved.
+© 2026 Valo Optimise Ltd. All Rights Reserved.

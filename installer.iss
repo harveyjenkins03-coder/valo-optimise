@@ -3,7 +3,7 @@
 ; Requires: dist\ValoOptimise.exe (PyInstaller output)
 
 #define MyAppName "Valo Optimise"
-#define MyAppVersion "2.0.0"
+#define MyAppVersion "2.1.0"
 #define MyAppPublisher "Valo Optimise Ltd"
 #define MyAppURL "https://valooptimise.com"
 #define MyAppExeName "ValoOptimise.exe"
