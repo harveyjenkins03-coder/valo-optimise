@@ -3638,6 +3638,8 @@ class App(ctk.CTk):
             self.after(500, self._show_onboarding)
         # Check for updates silently in background — shows dialog only if newer version found
         self.after(4000, self._check_for_update)
+        # Anonymous launch counter — no personal data, just version + count
+        self.after(5000, self._ping_launch)
 
     def _build(self):
         self.grid_columnconfigure(1, weight=1)
@@ -4044,6 +4046,25 @@ class App(ctk.CTk):
             _win_toast("Valo Optimise", "Pre-Game Boost triggered (Ctrl+Shift+B)")
 
     # ── Auto-Restore on Exit ──────────────────────────────────────────────────
+
+    def _ping_launch(self):
+        """Anonymous launch counter — fires once per session, no personal data."""
+        def _do():
+            try:
+                from version import VERSION
+            except ImportError:
+                VERSION = "0.0.0"
+            try:
+                import urllib.request
+                req = urllib.request.Request(
+                    f"https://valo-launch-counter.valooptimise.workers.dev/ping?v={VERSION}",
+                    method="POST",
+                    headers={"User-Agent": f"ValoOptimise/{VERSION}"},
+                )
+                urllib.request.urlopen(req, timeout=5)
+            except Exception:
+                pass
+        run_in_thread(_do, None)
 
     def _check_for_update(self):
         """Silently check GitHub for a newer release; show dialog if found."""
