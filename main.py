@@ -4057,7 +4057,7 @@ class App(ctk.CTk):
             try:
                 import urllib.request
                 req = urllib.request.Request(
-                    f"https://valo-launch-counter.valooptimise.workers.dev/ping?v={VERSION}",
+                    f"https://valo-launch-counter.harveyjenkins03.workers.dev/ping?v={VERSION}",
                     method="POST",
                     headers={"User-Agent": f"ValoOptimise/{VERSION}"},
                 )

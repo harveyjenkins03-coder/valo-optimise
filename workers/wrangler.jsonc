@@ -1,0 +1,11 @@
+{
+  "name": "valo-launch-counter",
+  "main": "launch-counter.js",
+  "compatibility_date": "2024-01-01",
+  "kv_namespaces": [
+    {
+      "binding": "LAUNCH_COUNTS",
+      "id": "c0b683adcfea41ee87568dc2d68edd3f"
+    }
+  ]
+}
