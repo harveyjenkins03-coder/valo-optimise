@@ -1,1 +1,4 @@
-VERSION = "1.0.6"
+# Copyright (c) 2026 Valo Optimise Ltd. All rights reserved.
+# Proprietary and confidential. See LICENSE for terms.
+
+VERSION = "2.0.0"
