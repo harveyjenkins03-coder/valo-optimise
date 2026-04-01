@@ -1,3 +1,6 @@
+# Copyright (c) 2026 Valo Optimise Ltd. All rights reserved.
+# Proprietary and confidential. See LICENSE for terms.
+
 """
 utils/anim.py — Lightweight after()-based UI animations for CustomTkinter.
 No external dependencies; uses only the Tk event loop.
@@ -112,6 +115,63 @@ def flash_bg(widget, flash_color: str, original_color: str,
     try:
         widget.after(duration_ms,
                      lambda: _safe_set(widget, "fg_color", original_color))
+    except Exception:
+        pass
+
+
+def slide_in(widget, parent, duration_ms: int = 160):
+    """Slide a frame in from the right edge, then switch to pack layout."""
+    try:
+        parent.update_idletasks()
+        width = parent.winfo_width()
+    except Exception:
+        widget.pack(fill="both", expand=True)
+        return
+
+    steps = max(8, duration_ms // 16)
+    interval = max(1, duration_ms // steps)
+
+    widget.place(x=width, y=0, relwidth=1, relheight=1)
+
+    def _step(i):
+        t = i / steps
+        eased = 1 - (1 - t) ** 3
+        x = int(width * (1 - eased))
+        try:
+            widget.place_configure(x=x)
+        except Exception:
+            return
+        if i < steps:
+            widget.after(interval, lambda: _step(i + 1))
+        else:
+            try:
+                widget.place_forget()
+                widget.pack(fill="both", expand=True)
+            except Exception:
+                pass
+
+    _step(0)
+
+
+def show_toast(parent, message, toast_type="success", duration_ms=3000):
+    """In-app toast notification that appears in the top-right corner."""
+    colors = {"success": "#2ECC71", "error": "#E74C3C", "info": "#F5C05A"}
+    border_color = colors.get(toast_type, colors["info"])
+    toast = None
+    try:
+        import customtkinter as ctk
+        toast = ctk.CTkFrame(parent, fg_color="#152235", corner_radius=8,
+                             border_width=1, border_color=border_color)
+        toast.place(relx=1.0, y=10, anchor="ne", x=-20)
+        ctk.CTkLabel(toast, text=message, font=("Sora", 11),
+                     text_color=border_color).pack(padx=16, pady=8)
+        parent.after(duration_ms, lambda: _safe_destroy(toast))
+    except Exception:
+        pass
+
+def _safe_destroy(widget):
+    try:
+        widget.destroy()
     except Exception:
         pass
 
